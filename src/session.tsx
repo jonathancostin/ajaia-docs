@@ -49,27 +49,69 @@ function endSession() {
   queryClient.setQueryData<User | null>(sessionKey, null);
 }
 
-export async function signIn(email: string, password: string) {
-  const { user } = await api.login(email, password);
-  startSession(user);
-}
+// One browser holds one sign-in, shared by all its tabs and windows. When
+// another tab signs in as someone else, this tab must follow. Otherwise it
+// would show one person's name and rights while the server treats it as another.
+const otherTabs = "BroadcastChannel" in globalThis ? new BroadcastChannel("ajaia-docs-session") : null;
+let changingHere = false;
 
-export async function signOut() {
+async function followSignInElsewhere() {
+  const shown = queryClient.getQueryData<User | null>(sessionKey);
+  if (shown === undefined || changingHere) return;
+  let actual: User | null;
   try {
-    await api.logout();
-  } finally {
-    endSession();
-  }
-}
-
-export async function switchUser(email: string) {
-  await api.logout().catch(() => undefined);
-  try {
-    await signIn(email, DEMO_PASSWORD);
+    actual = (await api.me()).user;
   } catch (error) {
-    endSession();
-    throw error;
+    if (!(error instanceof ApiError) || error.code !== "unauthenticated") return;
+    actual = null;
   }
+  if (changingHere || actual?.id === shown?.id) return;
+  if (actual) startSession(actual);
+  else endSession();
+}
+
+otherTabs?.addEventListener("message", () => void followSignInElsewhere());
+// Covers browsers without BroadcastChannel, and a sign-in that happened while this tab was asleep.
+window.addEventListener("focus", () => void followSignInElsewhere());
+
+async function changeSession(change: () => Promise<void>) {
+  changingHere = true;
+  try {
+    await change();
+  } finally {
+    changingHere = false;
+    otherTabs?.postMessage("changed");
+  }
+}
+
+export function signIn(email: string, password: string) {
+  return changeSession(async () => {
+    const { user } = await api.login(email, password);
+    startSession(user);
+  });
+}
+
+export function signOut() {
+  return changeSession(async () => {
+    try {
+      await api.logout();
+    } finally {
+      endSession();
+    }
+  });
+}
+
+export function switchUser(email: string) {
+  return changeSession(async () => {
+    await api.logout().catch(() => undefined);
+    try {
+      const { user } = await api.login(email, DEMO_PASSWORD);
+      startSession(user);
+    } catch (error) {
+      endSession();
+      throw error;
+    }
+  });
 }
 
 const UserContext = createContext<User | null>(null);

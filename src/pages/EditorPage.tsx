@@ -35,8 +35,10 @@ export function EditorPage() {
 }
 
 function DocumentLoader({ id }: { id: string }) {
+  const user = useUser();
   const query = useQuery({
-    queryKey: ["document", id],
+    // The answer includes this user's role, so it is never shared between users.
+    queryKey: ["document", id, user.id],
     queryFn: () => api.getDocument(id),
     gcTime: 0,
     staleTime: Infinity,

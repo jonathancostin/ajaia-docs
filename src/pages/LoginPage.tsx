@@ -42,6 +42,10 @@ export function LoginPage() {
         )}
 
         <h2 className="mt-8 text-sm font-semibold text-slate-900">Sign in with a demo account</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          A browser holds one sign-in for all its windows. To be two people at once and see live editing, open a
+          private window or a second browser.
+        </p>
         <ul className="mt-3 grid gap-3 sm:grid-cols-3">
           {DEMO_ACCOUNTS.map((account) => (
             <li key={account.email} className="flex flex-col rounded-lg border border-slate-200 bg-white p-4">
