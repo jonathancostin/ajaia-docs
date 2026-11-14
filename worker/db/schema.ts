@@ -43,4 +43,22 @@ export const documentShares = sqliteTable(
   (t) => [primaryKey({ columns: [t.documentId, t.userId] }), index("shares_user_idx").on(t.userId)],
 );
 
+// Earlier states of a document. A row is written just before a save replaces
+// that state (see worker/history.ts for when).
+export const documentVersions = sqliteTable(
+  "document_versions",
+  {
+    id: text("id").primaryKey(),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    content: text("content").notNull(),
+    // Who wrote this state and when, copied from the document row it came from.
+    savedBy: text("saved_by").references(() => users.id),
+    savedAt: integer("saved_at").notNull(),
+  },
+  (t) => [index("versions_document_idx").on(t.documentId, t.savedAt)],
+);
+
 export type ShareRole = "viewer" | "editor";

@@ -5,8 +5,9 @@ import { z } from "zod";
 import { type DocumentRow, findAccess, requireAccess, type Role } from "../access.ts";
 import { contentSchema, EMPTY_DOCUMENT, MAX_CONTENT_BYTES } from "../content.ts";
 import type { Db } from "../db/client.ts";
-import { documentShares, documents, users } from "../db/schema.ts";
+import { documentShares, documents, documentVersions, users } from "../db/schema.ts";
 import { documentNotFound, HttpError } from "../errors.ts";
+import { keepVersion } from "../history.ts";
 import { type AppEnv, requireUser } from "../session.ts";
 import { jsonBody } from "../validate.ts";
 
@@ -39,7 +40,7 @@ const person = { id: users.id, email: users.email, name: users.name };
 const shareCount = sql<number>`(select count(*) from ${documentShares} where ${documentShares.documentId} = ${documents.id})`;
 
 /** The document as the API returns it, without its content. */
-async function toMeta(db: Db, document: DocumentRow, role: Role) {
+export async function toMeta(db: Db, document: DocumentRow, role: Role) {
   const people = await db
     .select(person)
     .from(users)
@@ -128,7 +129,7 @@ export const documentRoutes = new Hono<AppEnv>()
     const { db, user } = c.var;
     const id = c.req.param("id");
     const body = c.req.valid("json");
-    const { role } = await requireAccess(db, id, user.id, "write");
+    const { document, role } = await requireAccess(db, id, user.id, "write");
 
     // The version check and the write are one statement, so two saves that
     // start from the same version cannot both succeed.
@@ -153,6 +154,9 @@ export const documentRoutes = new Hono<AppEnv>()
         current: { version, updatedAt, updatedBy },
       });
     }
+    if (saved.content !== document.content || saved.title !== document.title) {
+      await keepVersion(db, document, user.id);
+    }
     return c.json({ document: await toMeta(db, saved, role) });
   })
 
@@ -162,6 +166,7 @@ export const documentRoutes = new Hono<AppEnv>()
     await requireAccess(db, id, user.id, "delete");
     await db.batch([
       db.delete(documentShares).where(eq(documentShares.documentId, id)),
+      db.delete(documentVersions).where(eq(documentVersions.documentId, id)),
       db.delete(documents).where(eq(documents.id, id)),
     ]);
     return c.body(null, 204);

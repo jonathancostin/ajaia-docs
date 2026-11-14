@@ -16,7 +16,21 @@ const MATRIX: Record<string, Record<Actor, number>> = {
   "share it": { owner: 200, editor: 403, viewer: 403, stranger: 404, anonymous: 401 },
   "remove a share": { owner: 204, editor: 403, viewer: 403, stranger: 404, anonymous: 401 },
   "delete it": { owner: 204, editor: 403, viewer: 403, stranger: 404, anonymous: 401 },
+  "see the version history": { owner: 200, editor: 200, viewer: 200, stranger: 404, anonymous: 401 },
+  "read an old version": { owner: 200, editor: 200, viewer: 200, stranger: 404, anonymous: 401 },
+  "restore an old version": { owner: 200, editor: 200, viewer: 403, stranger: 404, anonymous: 401 },
 };
+
+/** Has the editor save once, which keeps the owner's original as a version, and returns that version's id. */
+async function olderVersionId(id: string, version: number) {
+  await call("PATCH", `/documents/${id}`, {
+    cookie: cookies.editor,
+    body: { content: paragraph("second draft"), baseVersion: version },
+  });
+  const response = await call("GET", `/documents/${id}/versions`, { cookie: cookies.owner });
+  const { versions } = (await response.json()) as { versions: { id: string }[] };
+  return versions[0].id;
+}
 
 const ATTEMPT: Record<string, (id: string, version: number, cookie?: string) => Promise<Response>> = {
   "read the document": (id, _version, cookie) => call("GET", `/documents/${id}`, { cookie }),
@@ -29,6 +43,11 @@ const ATTEMPT: Record<string, (id: string, version: number, cookie?: string) => 
     call("PUT", `/documents/${id}/shares`, { cookie, body: { email: "dave@example.com", role: "editor" } }),
   "remove a share": (id, _version, cookie) => call("DELETE", `/documents/${id}/shares/u_carol`, { cookie }),
   "delete it": (id, _version, cookie) => call("DELETE", `/documents/${id}`, { cookie }),
+  "see the version history": (id, _version, cookie) => call("GET", `/documents/${id}/versions`, { cookie }),
+  "read an old version": async (id, version, cookie) =>
+    call("GET", `/documents/${id}/versions/${await olderVersionId(id, version)}`, { cookie }),
+  "restore an old version": async (id, version, cookie) =>
+    call("POST", `/documents/${id}/versions/${await olderVersionId(id, version)}/restore`, { cookie }),
 };
 
 describe("access matrix", () => {

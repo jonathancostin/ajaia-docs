@@ -70,6 +70,62 @@ describe("saving", () => {
   });
 });
 
+describe("version history", () => {
+  const save = (id: string, actor: Actor, text: string) =>
+    call("PATCH", `/documents/${id}`, { cookie: cookies[actor], body: { content: paragraph(text), baseVersion: 1, force: true } });
+  const history = async (id: string) => {
+    const response = await call("GET", `/documents/${id}/versions`, { cookie: cookies.owner });
+    return ((await response.json()) as { versions: { id: string; savedBy: { name: string } }[] }).versions;
+  };
+  const contentOf = async (path: string) => {
+    const response = await call("GET", path, { cookie: cookies.owner });
+    const body = (await response.json()) as Record<string, { content: unknown }>;
+    return (body.document ?? body.version).content;
+  };
+
+  it("keeps what one person wrote when another takes over, but not every autosave", async () => {
+    const document = await createSharedDocument(cookies.owner);
+    await save(document.id, "editor", "Bob, first save");
+    await save(document.id, "editor", "Bob, a second later");
+    await save(document.id, "editor", "Bob, and again");
+
+    const versions = await history(document.id);
+    expect(versions).toHaveLength(1);
+    expect(versions[0].savedBy.name).toBe("Alice Nguyen");
+    expect(await contentOf(`/documents/${document.id}/versions/${versions[0].id}`)).toEqual(paragraph("original"));
+  });
+
+  it("restores an old version and keeps the replaced one, so a restore can be undone", async () => {
+    const document = await createSharedDocument(cookies.owner);
+    await save(document.id, "editor", "Bob's rewrite");
+    const [original] = await history(document.id);
+
+    const restore = await call("POST", `/documents/${document.id}/versions/${original.id}/restore`, {
+      cookie: cookies.owner,
+    });
+    expect(restore.status).toBe(200);
+    expect(await contentOf(`/documents/${document.id}`)).toEqual(paragraph("original"));
+
+    const [replaced] = await history(document.id);
+    expect(replaced.savedBy.name).toBe("Bob Okafor");
+    expect(await contentOf(`/documents/${document.id}/versions/${replaced.id}`)).toEqual(paragraph("Bob's rewrite"));
+  });
+
+  it("does not serve one document's version through another document", async () => {
+    const first = await createSharedDocument(cookies.owner);
+    const second = await createSharedDocument(cookies.owner);
+    await save(first.id, "editor", "changed");
+    const [version] = await history(first.id);
+
+    const read = await call("GET", `/documents/${second.id}/versions/${version.id}`, { cookie: cookies.owner });
+    expect(read.status).toBe(404);
+    const restore = await call("POST", `/documents/${second.id}/versions/${version.id}/restore`, {
+      cookie: cookies.owner,
+    });
+    expect(restore.status).toBe(404);
+  });
+});
+
 describe("content validation", () => {
   const create = (body: unknown) => call("POST", "/documents", { cookie: cookies.owner, body });
   const withNode = (node: unknown) => ({ title: "x", content: { type: "doc", content: [node] } });

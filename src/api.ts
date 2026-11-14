@@ -36,6 +36,18 @@ export interface Share {
   role: ShareRole;
 }
 
+/** An earlier state of a document, kept when a later save replaced it. */
+export interface VersionSummary {
+  id: string;
+  title: string;
+  savedAt: number;
+  savedBy: { id: string; name: string } | null;
+}
+
+export interface VersionDetail extends VersionSummary {
+  content: JSONContent;
+}
+
 export type ErrorCode =
   | "unauthenticated"
   | "invalid_credentials"
@@ -115,4 +127,11 @@ export const api = {
   setShare: (id: string, email: string, role: ShareRole) =>
     request<{ share: Share }>("PUT", `/documents/${id}/shares`, { email, role }),
   removeShare: (id: string, userId: string) => request<void>("DELETE", `/documents/${id}/shares/${userId}`),
+
+  listVersions: (id: string) => request<{ versions: VersionSummary[] }>("GET", `/documents/${id}/versions`),
+  getVersion: (id: string, versionId: string) =>
+    request<{ version: VersionDetail }>("GET", `/documents/${id}/versions/${versionId}`),
+  /** Puts an earlier version back. The state it replaces is kept as a version, so this can be undone. */
+  restoreVersion: (id: string, versionId: string) =>
+    request<{ document: DocumentDetail }>("POST", `/documents/${id}/versions/${versionId}/restore`),
 };

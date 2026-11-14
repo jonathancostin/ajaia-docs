@@ -5,6 +5,7 @@ import { HTTPException } from "hono/http-exception";
 import { HttpError } from "./errors.ts";
 import { authRoutes } from "./routes/auth.ts";
 import { documentRoutes } from "./routes/documents.ts";
+import { historyRoutes } from "./routes/history.ts";
 import { type AppEnv, withDb } from "./session.ts";
 
 // Cloudflare serves the built React app itself. Only /api/* reaches this Worker
@@ -21,6 +22,7 @@ app.get("/health", async (c) => {
 
 app.route("/", authRoutes);
 app.route("/documents", documentRoutes);
+app.route("/documents", historyRoutes);
 
 app.notFound((c) => c.json({ error: { code: "not_found", message: "There is no API route at this address." } }, 404));
 
