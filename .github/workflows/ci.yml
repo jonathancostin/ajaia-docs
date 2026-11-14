@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: cp .dev.vars.example .dev.vars
+      # Type-checks the client and the Worker, then builds both.
+      - run: npm run build
+      # API tests in the Workers runtime with a real D1 database, plus import and UI tests.
+      - run: npm test
