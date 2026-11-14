@@ -24,13 +24,14 @@ The header has a "Switch user" menu, so you can move between accounts without go
 - **Sharing:** the owner shares with another user as **Can edit** or **Can view**, changes a role, or removes access. The document list separates "Owned by me" from "Shared with me".
 - **Roles are enforced on the server.** A viewer cannot save, a user without access cannot tell the document exists. See the access table in [ARCHITECTURE.md](ARCHITECTURE.md).
 - **Conflict safety:** if two people edit the same document, the second save is refused and that person chooses "Load their version" or "Keep mine". Nothing is overwritten silently.
+- **Version history:** earlier versions of a document are kept, can be read, and can be restored. A restore can itself be undone.
 - **Export:** download any document as Markdown.
 
 ## What is not built
 
 - Real-time co-editing and presence. Editing is turn-based with the conflict check above.
 - Sign-up, password reset and email invites. You can only share with the three seeded accounts.
-- Comments, images, tables, PDF export, version history, folders and search.
+- Comments, images, tables, PDF export, folders and search. Tables in an imported Markdown file are dropped.
 
 [ARCHITECTURE.md](ARCHITECTURE.md) explains each cut and what I would build next with another 2 to 4 hours.
 
@@ -51,7 +52,7 @@ npm run dev                      # http://127.0.0.1:3410
 npm test
 ```
 
-- `test/worker`: API tests that run inside the Workers runtime against a real D1 database built from the production migrations. They assert every cell of the access table (5 kinds of user, 7 actions), that a refused edit changes nothing, that role changes take effect at once, version conflicts, and content validation.
+- `test/worker`: API tests that run inside the Workers runtime against a real D1 database built from the production migrations. They assert every cell of the access table (5 kinds of user, 10 actions), that a refused edit changes nothing, that role changes take effect at once, version conflicts, version history, and content validation.
 - `test/lib`: file import and export on real fixture files, including a .docx, plus the rejection cases (wrong type, empty, too large, damaged).
 - `test/e2e`: one browser test of the main flow with Playwright. Run it with `npm run test:e2e` while `npm run dev` is running.
 
@@ -78,7 +79,8 @@ worker/              Cloudflare Worker (Hono)
   access.ts          who can do what to a document. Every route calls it
   content.ts         validation of document content
   session.ts         signed cookie sessions
-  routes/            auth, documents and shares
+  history.ts         when an earlier version of a document is kept
+  routes/            auth, documents, shares and version history
   db/schema.ts       tables (Drizzle)
 migrations/          SQL migrations and the seed data
 test/                API, import and browser tests

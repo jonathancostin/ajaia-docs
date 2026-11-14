@@ -29,6 +29,7 @@ flowchart LR
 | `users` | id, email (unique), name, password_hash, created_at | Three seeded accounts |
 | `documents` | id, owner_id, title, content, version, created_at, updated_at, updated_by | `content` is TipTap JSON stored as text. `version` goes up by one on every save |
 | `document_shares` | document_id, user_id, role, created_at | Primary key on both ids. `role` is `viewer` or `editor` |
+| `document_versions` | id, document_id, title, content, saved_by, saved_at | Earlier states of a document. At most 50 per document |
 
 The owner is a column on the document, not a row in the shares table, so a document can never end up without an owner.
 
@@ -43,6 +44,8 @@ Content is stored as the editor's JSON, not HTML. It round-trips without loss, i
 | Read the document | 200 | 200 | 200 | 404 | 401 |
 | Edit content or rename | 200 | 200 | 403 | 404 | 401 |
 | See who has access | 200 | 200 | 200 | 404 | 401 |
+| See the version history, read an old version | 200 | 200 | 200 | 404 | 401 |
+| Restore an old version | 200 | 200 | 403 | 404 | 401 |
 | Share, change a role, remove a share | 200 | 403 | 403 | 404 | 401 |
 | Delete | 204 | 403 | 403 | 404 | 401 |
 
@@ -57,6 +60,12 @@ UPDATE documents SET ..., version = version + 1 WHERE id = ? AND version = ?
 ```
 
 If no row changes, someone else saved first. The server answers 409 with who saved and when, and the editor offers "Load their version" or "Keep mine". This is not real-time collaboration. It is the smallest thing that makes two people in one document safe: nobody's work is overwritten without them knowing.
+
+## Version history
+
+When a save replaces a document's state, the old state is kept as a version in three cases: a different person is saving than the one who wrote it, the newest kept version is more than ten minutes older, or the save is a restore. Keeping every autosave would bury the versions worth having under hundreds of near-copies. Restoring first keeps the state being replaced, so a restore can be undone. The rule lives in `worker/history.ts`.
+
+This pairs with the conflict check. "Keep mine" overwrites the other person's save, and history is how they get it back.
 
 ## File import
 
@@ -88,13 +97,13 @@ The app uses 100,000. The account is on the Workers Paid plan, where the CPU lim
 
 - **Real-time co-editing and presence.** The honest version of this needs a CRDT (Yjs) and a stateful server (a Durable Object per document). That is most of a day done properly. Version checks give safe turn-taking for a fraction of the cost.
 - **Sign-up, password reset, email invites.** Seeded users show the sharing model without an email service.
-- **Comments, images, tables, PDF export, folders, search, trash.** None of them changes how the core is built.
-- **Version history.** The `version` column is the hook for it. Snapshots on save and a restore button are the first thing I would add.
+- **Images, tables, PDF export, folders, search, trash.** None of them changes how the core is built.
+- **Suggestion mode and comments.** Version history covers "what changed and who did it" at a coarser grain for much less work.
 
 ## With another 2 to 4 hours
 
-1. Version history: snapshot on save (at most one per few minutes per user), list and restore.
-2. Real-time editing with Yjs in a Durable Object, with presence.
+1. Real-time editing with Yjs in a Durable Object, with presence.
+2. A diff view between two versions, and named versions.
 3. Link sharing ("anyone with the link can view") and email invites for people without an account.
 4. Images in documents, stored in R2, and tables.
 5. Rate limiting on login, and a Playwright run against the deployed URL in CI.
