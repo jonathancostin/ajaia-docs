@@ -70,7 +70,7 @@ npm run test:e2e    # 3 browser tests, needs `npm run dev` running in another te
 
 There are no component tests with a mocked API. I removed the ones I had: they only asserted on mocks or repeated what the browser tests prove against the real server.
 
-Every push to `main` runs the build, `npm test` and the browser test against the production build (`.github/workflows/ci.yml`, on a self-hosted runner).
+Every push to `main` runs the build, `npm test` and the browser tests against the production build (`.github/workflows/ci.yml`, on a self-hosted runner).
 
 ## Deploy
 
