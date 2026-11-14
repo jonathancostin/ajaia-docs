@@ -49,8 +49,9 @@ const welcome = {
     heading(2, "How sharing works"),
     list("bulletList", [
       [text("The owner decides who has access. Editors can change the text. Viewers can only read.")],
-      [text("The server checks every request, so a hidden button is never the only protection.")],
-      [text("If two people save at the same time, the second is asked whose version to keep. The other version stays in History.")],
+      [text("Several people can edit at once. Open this document as two people, one in a private window, and you will see each other's cursors.")],
+      [text("The server checks every request and every live edit, so a hidden button is never the only protection.")],
+      [text("Earlier versions stay in History, and restoring one updates the document for everyone who has it open.")],
     ]),
   ],
 };
