@@ -16,6 +16,7 @@ import { api } from "../api";
 import type { DocumentSummary } from "../api";
 import { Header } from "../components/Header";
 import { formatRelativeTime, roleLabels } from "../lib/format";
+import { contentWidth } from "../layout";
 
 async function importDocument(file: File) {
   // Loaded on first use so mammoth stays out of the main bundle.
@@ -53,7 +54,7 @@ export function DocumentsPage() {
   return (
     <div className="min-h-dvh bg-slate-50">
       <Header />
-      <main className="mx-auto max-w-4xl px-4 py-8">
+      <main className={`${contentWidth} py-8`}>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="mr-auto text-2xl font-semibold text-slate-900">Documents</h1>
           <Button

@@ -8,6 +8,7 @@ import type { LucideIcon } from "lucide-react";
 import { Bold, Italic, List, ListOrdered, Quote, Redo2, Strikethrough, Underline, Undo2 } from "lucide-react";
 import { useRef } from "react";
 import type { ReactElement } from "react";
+import { contentWidth } from "../layout";
 
 const blockTypes = [
   { value: "paragraph", label: "Normal text" },
@@ -76,7 +77,7 @@ export function Toolbar({ editor }: { editor: Editor }) {
     <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
       <ToolbarRoot
         aria-label="Formatting"
-        className="mx-auto flex max-w-5xl flex-nowrap gap-1 overflow-x-auto rounded-none border-0 bg-transparent px-4 py-1.5"
+        className={`${contentWidth} flex flex-nowrap gap-1 overflow-x-auto rounded-none border-0 bg-transparent py-1.5`}
         // A mouse click on a button must not take focus out of the document.
         // If it does, the next keystrokes go to the button and are lost, and the
         // pending bold or italic is dropped when focus comes back.

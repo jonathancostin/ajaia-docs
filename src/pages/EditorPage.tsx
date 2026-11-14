@@ -4,7 +4,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import { Button } from "@ui-sdk/react/button";
 import { Field, FieldLabel } from "@ui-sdk/react/field";
 import { Input } from "@ui-sdk/react/input";
-import { Download } from "lucide-react";
+import { ArrowLeft, Download } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { api, ApiError } from "../api";
@@ -16,6 +16,7 @@ import { Toolbar } from "../components/Toolbar";
 import { useAutosave } from "../hooks/useAutosave";
 import type { SaveStatus } from "../hooks/useAutosave";
 import { editorExtensions } from "../lib/extensions";
+import { contentWidth } from "../layout";
 import { handleApiError, useUser } from "../session";
 
 export function EditorPage() {
@@ -155,7 +156,16 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
   return (
     <>
       <div className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+        <div className={`${contentWidth} pt-2.5`}>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1 rounded text-sm font-medium text-slate-700 no-underline hover:text-blue-700"
+          >
+            <ArrowLeft className="size-4" aria-hidden />
+            Back to documents
+          </Link>
+        </div>
+        <div className={`${contentWidth} flex flex-wrap items-center gap-x-4 gap-y-2 pt-1.5 pb-3`}>
           <div className="min-w-0 flex-1 basis-60">
             <Field>
               <FieldLabel className="sr-only">Document title</FieldLabel>
@@ -215,8 +225,8 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
 
       {canEdit && <Toolbar editor={editor} />}
 
-      <main className="flex-1 px-2 py-6 sm:px-6 sm:py-10">
-        <div className="mx-auto max-w-[816px] space-y-3">
+      <main className="flex-1 py-6 sm:py-8">
+        <div className={`${contentWidth} space-y-3`}>
           {!canEdit && (
             <p className="rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700">
               You can view this document but not edit it.
@@ -242,7 +252,7 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
             </p>
           )}
           <div
-            className="min-h-[60vh] rounded-sm border border-slate-200 bg-white px-5 py-8 shadow-sm sm:px-16 sm:py-14"
+            className="min-h-[calc(100dvh-19rem)] rounded-sm border border-slate-200 bg-white px-5 py-8 shadow-sm sm:px-16 sm:py-14"
             onMouseDown={(event) => {
               if (!canEdit || event.target !== event.currentTarget) return;
               event.preventDefault();

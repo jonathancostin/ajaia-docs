@@ -4,6 +4,7 @@ import { FileText, LogOut, Users } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { DEMO_ACCOUNTS } from "../demoAccounts";
+import { contentWidth } from "../layout";
 import { signOut, switchUser, useUser } from "../session";
 
 export function Header() {
@@ -25,7 +26,7 @@ export function Header() {
 
   return (
     <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5">
+      <div className={`${contentWidth} flex items-center gap-3 py-2.5`}>
         <Link to="/" className="flex shrink-0 items-center gap-2 rounded font-semibold text-slate-900 no-underline">
           <FileText className="size-5 text-blue-600" aria-hidden />
           Ajaia Docs
@@ -33,7 +34,7 @@ export function Header() {
         <div className="ml-auto flex min-w-0 items-center gap-2">
           <div className="min-w-0 text-right leading-tight">
             <p className="truncate text-sm font-medium text-slate-900">{user.name}</p>
-            <p className="truncate text-xs text-slate-500">{user.email}</p>
+            <p className="truncate text-xs text-slate-700">{user.email}</p>
           </div>
           <Menu onAction={(email) => void run(() => switchUser(email))}>
             <MenuTrigger className="shrink-0" disabled={busy}>
@@ -61,7 +62,7 @@ export function Header() {
         </div>
       </div>
       {error && (
-        <p role="alert" className="mx-auto max-w-6xl px-4 pb-2 text-sm text-red-700">
+        <p role="alert" className={`${contentWidth} pb-2 text-sm text-red-700`}>
           {error}
         </p>
       )}

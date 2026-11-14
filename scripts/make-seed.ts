@@ -42,8 +42,8 @@ const welcome = {
     list("orderedList", [
       [text("Format some text with the toolbar, then refresh the page. Changes save on their own.")],
       [text("Go back to the document list and import a "), text(".docx", "bold"), text(", "), text(".md", "bold"), text(" or "), text(".txt", "bold"), text(" file.")],
-      [text("Press "), text("Share", "underline"), text(", add a person and pick Can edit or Can view.")],
-      [text("Switch to Bob and change something. Switch back to Alice, open History, and restore the version from before his change.")],
+      [text("Press "), text("Share", "bold"), text(", add a person and pick Can edit or Can view.")],
+      [text("Switch to Bob and change something. Switch back to Alice, open "), text("History", "bold"), text(", and restore the version from before his change.")],
       [text("Download the document as Markdown.")],
     ]),
     heading(2, "How sharing works"),
