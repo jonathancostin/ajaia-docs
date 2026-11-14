@@ -1,6 +1,6 @@
 // The main flow a reviewer would walk through, in a real browser:
 // write and format, reload, share with two roles, and see each role's view.
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 const shots = process.env.E2E_SHOTS;
 const shot = async (page: Page, name: string) => {
@@ -11,6 +11,12 @@ async function switchUser(page: Page, name: string) {
   await page.getByRole("button", { name: "Switch user" }).click();
   await page.getByRole("menuitem", { name: new RegExp(`Sign in as ${name}`) }).click();
   await expect(page.getByRole("banner")).toContainText(name);
+}
+
+// ui-sdk Select is a button-like combobox with a popup listbox, not a native <select>.
+async function choose(page: Page, select: Locator, option: string) {
+  await select.click();
+  await page.getByRole("option", { name: option, exact: true }).click();
 }
 
 test("write, reload, share as editor and viewer, import a .docx", async ({ page }) => {
@@ -27,7 +33,7 @@ test("write, reload, share as editor and viewer, import a .docx", async ({ page 
   await page.getByLabel("Document title").fill(title);
   const content = page.getByLabel("Document content");
   await content.click();
-  await page.getByLabel("Text style").selectOption({ label: "Heading 1" });
+  await choose(page, page.getByRole("combobox", { name: "Text style" }), "Heading 1");
   await page.keyboard.type("Goals");
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: "Bold" }).click();
@@ -56,14 +62,16 @@ test("write, reload, share as editor and viewer, import a .docx", async ({ page 
   // Share: Bob can edit, Carol can view.
   await page.getByRole("button", { name: "Share" }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByLabel("Person").selectOption({ label: "Bob Okafor (bob@example.com)" });
-  await dialog.getByLabel("Role", { exact: true }).selectOption({ label: "Can edit" });
+  const person = dialog.getByRole("combobox", { name: "Person" });
+  const role = dialog.getByRole("combobox", { name: "Role", exact: true });
+  await choose(page, person, "Bob Okafor (bob@example.com)");
+  await choose(page, role, "Can edit");
   await dialog.getByRole("button", { name: "Add" }).click();
-  await expect(dialog.getByLabel("Role for Bob Okafor")).toHaveValue("editor");
-  await dialog.getByLabel("Person").selectOption({ label: "Carol Diaz (carol@example.com)" });
-  await dialog.getByLabel("Role", { exact: true }).selectOption({ label: "Can view" });
+  await expect(dialog.getByRole("combobox", { name: "Role for Bob Okafor" })).toHaveText("Can edit");
+  await choose(page, person, "Carol Diaz (carol@example.com)");
+  await choose(page, role, "Can view");
   await dialog.getByRole("button", { name: "Add" }).click();
-  await expect(dialog.getByLabel("Role for Carol Diaz")).toHaveValue("viewer");
+  await expect(dialog.getByRole("combobox", { name: "Role for Carol Diaz" })).toHaveText("Can view");
   await shot(page, "04-share");
   await dialog.getByRole("button", { name: "Close" }).click();
   const documentUrl = page.url();

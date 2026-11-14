@@ -1,8 +1,50 @@
-@import "tailwindcss";
+@layer ui-sdk, theme, base, components, utilities;
+/* ui-sdk prepends its own <style> to <head>, so it is always the lowest layer. Preflight goes in a
+   sublayer of it: web.css rules then beat the reset, and Tailwind utilities still beat both. */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(ui-sdk.preflight);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "@ui-sdk/core/web.css";
 @plugin "@tailwindcss/typography";
+
+:root {
+  color-scheme: light;
+  --ui-background: #fff;
+  --ui-foreground: var(--color-slate-900);
+  --ui-muted: var(--color-slate-100);
+  --ui-muted-foreground: var(--color-slate-600);
+  --ui-border: var(--color-slate-200);
+  /* Between slate-400 and slate-500: the lightest edge that keeps 3:1 on white. */
+  --ui-input: #8592a6;
+  --ui-primary: var(--color-blue-600);
+  --ui-primary-foreground: #fff;
+  --ui-destructive: var(--color-red-700);
+  --ui-ring: var(--color-blue-600);
+  --ui-ring-border: var(--color-blue-600);
+  --ui-overlay: rgb(15 23 42 / 0.4);
+  --ui-radius: 0.375rem;
+  --ui-font-size: 0.875rem;
+  --ui-font-sans: var(--font-sans);
+}
 
 body {
   @apply bg-slate-50 text-slate-800 antialiased;
+}
+
+:is([data-slot], a):focus-visible {
+  outline-width: 2px;
+  outline-offset: 2px;
+}
+
+/* web.css lightens the hover fill toward white, which drops the white label below 4.5:1. */
+[data-slot][data-variant="solid"]:hover:not([data-disabled]) {
+  background: var(--color-blue-700);
+}
+
+[data-slot="toolbar"] [data-slot="toggle"][data-pressed] {
+  border-color: var(--color-blue-600);
+  background: var(--color-blue-50);
+  color: var(--color-blue-700);
 }
 
 .ProseMirror {

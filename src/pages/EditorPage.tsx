@@ -1,7 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { EditorContent, useEditor } from "@tiptap/react";
-import { Download, Share2 } from "lucide-react";
+import { Button } from "@ui-sdk/react/button";
+import { Field, FieldLabel } from "@ui-sdk/react/field";
+import { Input } from "@ui-sdk/react/input";
+import { Download } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { api, ApiError } from "../api";
@@ -13,7 +16,6 @@ import { useAutosave } from "../hooks/useAutosave";
 import type { SaveStatus } from "../hooks/useAutosave";
 import { editorExtensions } from "../lib/extensions";
 import { handleApiError, useUser } from "../session";
-import { focusRing, primaryButton, secondaryButton } from "../styles";
 
 export function EditorPage() {
   const { id = "" } = useParams();
@@ -47,14 +49,10 @@ function DocumentLoader({ id }: { id: string }) {
           {missing ? "This document does not exist or you do not have access to it." : query.error.message}
         </p>
         <div className="mt-4 flex justify-center gap-2">
-          {!missing && (
-            <button type="button" className={secondaryButton} onClick={() => void query.refetch()}>
-              Try again
-            </button>
-          )}
-          <Link to="/" className={primaryButton}>
+          {!missing && <Button onClick={() => query.refetch()}>Try again</Button>}
+          <Button data-variant="solid" render={<Link to="/" />}>
             Go to your documents
-          </Link>
+          </Button>
         </div>
       </div>
     );
@@ -74,7 +72,6 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
   const canEdit = initial.role !== "viewer";
   const isOwner = initial.role === "owner";
   const [title, setTitle] = useState(initial.title);
-  const [shareOpen, setShareOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const titleRef = useRef(initial.title);
   // Kept from the last update so a save on unmount does not need the editor.
@@ -148,18 +145,20 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
       <div className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
           <div className="min-w-0 flex-1 basis-60">
-            <input
-              aria-label="Document title"
-              className={`-mx-1 w-full rounded px-1 text-xl font-semibold text-slate-900 placeholder:text-slate-400 hover:bg-slate-50 read-only:hover:bg-transparent ${focusRing}`}
-              placeholder="Untitled document"
-              value={title}
-              readOnly={!canEdit}
-              onChange={(event) => {
-                titleRef.current = event.target.value;
-                setTitle(event.target.value);
-                markDirty();
-              }}
-            />
+            <Field>
+              <FieldLabel className="sr-only">Document title</FieldLabel>
+              <Input
+                className="-mx-1 h-auto w-full border-transparent bg-transparent px-1 text-xl font-semibold text-slate-900 placeholder:text-slate-500 hover:bg-slate-50 read-only:hover:bg-transparent"
+                placeholder="Untitled document"
+                value={title}
+                readOnly={!canEdit}
+                onValueChange={(value) => {
+                  titleRef.current = value;
+                  setTitle(value);
+                  markDirty();
+                }}
+              />
+            </Field>
             <div className="flex flex-wrap gap-x-3 text-sm text-slate-500">
               {!isOwner && <span>Owned by {initial.owner.name}</span>}
               {canEdit && (
@@ -167,13 +166,12 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
                   {status === "error" ? (
                     <span className="text-red-700">
                       Could not save.{" "}
-                      <button
-                        type="button"
-                        className={`rounded font-medium underline ${focusRing}`}
-                        onClick={() => void autosave.retry()}
+                      <Button
+                        className="h-auto border-0 bg-transparent p-0 align-baseline font-medium text-red-700 underline"
+                        onClick={() => autosave.retry()}
                       >
                         Retry
-                      </button>
+                      </Button>
                     </span>
                   ) : (
                     statusText[status]
@@ -183,14 +181,11 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
             </div>
           </div>
           <div className="flex gap-2">
-            <button type="button" className={primaryButton} onClick={() => setShareOpen(true)}>
-              <Share2 className="size-4" aria-hidden />
-              Share
-            </button>
-            <button type="button" className={secondaryButton} onClick={() => void downloadMarkdown()}>
-              <Download className="size-4" aria-hidden />
+            <ShareDialog documentId={initial.id} isOwner={isOwner} />
+            <Button onClick={downloadMarkdown}>
+              <Download aria-hidden />
               Download as Markdown
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -212,12 +207,10 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
               <p className="mr-auto">
                 {conflict.current?.updatedBy?.name ?? "Someone else"} saved a newer version of this document.
               </p>
-              <button type="button" className={secondaryButton} onClick={() => void loadTheirVersion()}>
-                Load their version
-              </button>
-              <button type="button" className={primaryButton} onClick={autosave.keepMine}>
+              <Button onClick={loadTheirVersion}>Load their version</Button>
+              <Button data-variant="solid" onClick={autosave.keepMine}>
                 Keep mine
-              </button>
+              </Button>
             </div>
           )}
           {actionError && (
@@ -230,8 +223,6 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
           </div>
         </div>
       </main>
-
-      {shareOpen && <ShareDialog documentId={initial.id} isOwner={isOwner} onClose={() => setShareOpen(false)} />}
     </>
   );
 }

@@ -1,10 +1,10 @@
 import { MutationCache, QueryCache, QueryClient, useQuery } from "@tanstack/react-query";
+import { Button } from "@ui-sdk/react/button";
 import { createContext, use } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { api, ApiError } from "./api";
 import type { User } from "./api";
 import { DEMO_PASSWORD } from "./demoAccounts";
-import { secondaryButton } from "./styles";
 
 const sessionKey = ["session"] as const;
 
@@ -99,9 +99,9 @@ export function RequireSession() {
         {session.isError ? (
           <div className="text-center" role="alert">
             <p>{session.error.message}</p>
-            <button type="button" className={`${secondaryButton} mt-3`} onClick={() => void session.refetch()}>
+            <Button className="mt-3" onClick={() => session.refetch()}>
               Try again
-            </button>
+            </Button>
           </div>
         ) : (
           <p>Loading...</p>

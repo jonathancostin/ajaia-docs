@@ -1,12 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertDialog,
+  AlertDialogBackdrop,
+  AlertDialogClose,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@ui-sdk/react/alert-dialog";
+import { Button } from "@ui-sdk/react/button";
 import { Plus, Trash2, Upload } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { Link, useNavigate } from "react-router";
 import { api } from "../api";
 import type { DocumentSummary } from "../api";
 import { Header } from "../components/Header";
 import { formatRelativeTime, roleLabels } from "../lib/format";
-import { dangerButton, focusRing, primaryButton, secondaryButton } from "../styles";
 
 async function importDocument(file: File) {
   // Loaded on first use so mammoth stays out of the main bundle.
@@ -47,28 +56,25 @@ export function DocumentsPage() {
       <main className="mx-auto max-w-4xl px-4 py-8">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="mr-auto text-2xl font-semibold text-slate-900">Documents</h1>
-          <button
-            type="button"
-            className={primaryButton}
+          <Button
+            data-variant="solid"
             disabled={create.isPending}
             onClick={() => {
               importer.reset();
               create.mutate();
             }}
           >
-            <Plus className="size-4" aria-hidden />
+            <Plus aria-hidden />
             {create.isPending ? "Creating..." : "New document"}
-          </button>
-          <button
-            type="button"
-            className={secondaryButton}
+          </Button>
+          <Button
             disabled={importer.isPending}
             aria-describedby="import-help"
             onClick={() => fileInput.current?.click()}
           >
-            <Upload className="size-4" aria-hidden />
+            <Upload aria-hidden />
             {importer.isPending ? "Importing..." : "Import file"}
-          </button>
+          </Button>
           <input
             ref={fileInput}
             type="file"
@@ -97,9 +103,9 @@ export function DocumentsPage() {
         ) : documents.isError ? (
           <div role="alert" className="mt-10 rounded-lg border border-slate-200 bg-white p-6 text-center">
             <p className="text-slate-700">{documents.error.message}</p>
-            <button type="button" className={`${secondaryButton} mt-3`} onClick={() => void documents.refetch()}>
+            <Button className="mt-3" onClick={() => documents.refetch()}>
               Try again
-            </button>
+            </Button>
           </div>
         ) : (
           <>
@@ -149,7 +155,6 @@ function DocumentSection({
 
 function DocumentRow({ document }: { document: DocumentSummary }) {
   const queryClient = useQueryClient();
-  const [confirming, setConfirming] = useState(false);
   const remove = useMutation({
     mutationFn: () => api.deleteDocument(document.id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["documents"] }),
@@ -158,7 +163,7 @@ function DocumentRow({ document }: { document: DocumentSummary }) {
 
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 hover:bg-slate-50">
-      <Link to={`/d/${document.id}`} className={`min-w-0 flex-1 rounded ${focusRing}`}>
+      <Link to={`/d/${document.id}`} className="min-w-0 flex-1 rounded no-underline">
         <span className="block truncate font-medium text-slate-900">{title}</span>
         <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
           {document.role === "owner" ? (
@@ -178,42 +183,39 @@ function DocumentRow({ document }: { document: DocumentSummary }) {
           <span>Updated {formatRelativeTime(document.updatedAt)}</span>
         </span>
       </Link>
-      {document.role === "owner" &&
-        (confirming ? (
-          <span className="flex items-center gap-2">
-            <span className="text-sm text-slate-700">Delete this document?</span>
-            <button
-              type="button"
-              className={`${dangerButton} py-1.5`}
-              disabled={remove.isPending}
-              onClick={() => remove.mutate()}
-            >
-              {remove.isPending ? "Deleting..." : "Delete"}
-            </button>
-            <button
-              type="button"
-              className={`${secondaryButton} py-1.5`}
-              disabled={remove.isPending}
-              onClick={() => setConfirming(false)}
-            >
-              Cancel
-            </button>
-          </span>
-        ) : (
-          <button
-            type="button"
-            className={`rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-red-700 ${focusRing}`}
+      {document.role === "owner" && (
+        <AlertDialog onOpenChange={(open) => open && remove.reset()}>
+          <AlertDialogTrigger
             aria-label={`Delete ${title}`}
             title="Delete"
-            onClick={() => setConfirming(true)}
+            className="border-transparent bg-transparent text-slate-500 hover:text-red-700"
           >
-            <Trash2 className="size-4" aria-hidden />
-          </button>
-        ))}
-      {remove.error && (
-        <p role="alert" className="w-full text-sm text-red-700">
-          {remove.error.message}
-        </p>
+            <Trash2 aria-hidden />
+          </AlertDialogTrigger>
+          <AlertDialogBackdrop />
+          <AlertDialogContent>
+            <div className="flex flex-col gap-1">
+              <AlertDialogTitle>Delete this document?</AlertDialogTitle>
+              <AlertDialogDescription className="m-0 break-words">{title}</AlertDialogDescription>
+            </div>
+            {remove.error && (
+              <p role="alert" className="text-sm text-red-700">
+                {remove.error.message}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <AlertDialogClose>Cancel</AlertDialogClose>
+              <AlertDialogClose
+                data-variant="destructive"
+                value="confirm"
+                data-agent-confirm={`Deletes ${title} for you and everyone it is shared with`}
+                action={() => remove.mutateAsync()}
+              >
+                {remove.isPending ? "Deleting..." : "Delete"}
+              </AlertDialogClose>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </li>
   );

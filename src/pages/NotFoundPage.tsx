@@ -1,5 +1,5 @@
+import { Button } from "@ui-sdk/react/button";
 import { Link } from "react-router";
-import { primaryButton } from "../styles";
 
 export function NotFoundPage() {
   return (
@@ -7,9 +7,9 @@ export function NotFoundPage() {
       <div className="max-w-sm text-center">
         <h1 className="text-xl font-semibold text-slate-900">Page not found</h1>
         <p className="mt-2 text-slate-600">There is nothing at this address.</p>
-        <Link to="/" className={`${primaryButton} mt-5`}>
+        <Button data-variant="solid" className="mt-5" render={<Link to="/" />}>
           Go to your documents
-        </Link>
+        </Button>
       </div>
     </main>
   );
