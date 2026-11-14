@@ -1,0 +1,7 @@
+Meeting notes
+Tuesday morning
+
+We agreed to ship the editor first.
+Sharing comes next.
+
+Questions go to the team channel.
