@@ -65,3 +65,11 @@ Working notes, kept while building. Times are minutes into the timer.
 - Reviewing the sub-agent's import code against the server rules showed a gap neither side's tests covered: a Markdown file with a relative link (`[x](./other.md)`) converts to a link the server rejects, so the whole import would fail with a 400.
 - Fix: one normalising pass after every converter (unsafe links keep their text and lose the link, unknown nodes are unwrapped), and the import tests now run each result through the server's own validation schema. The editor's link rule and the server's link rule are the same function's worth of logic.
 - Known limit found the same way: TipTap's Markdown parser drops tables, including their text.
+
+### 0:35, passed in development, failed on the live site
+
+- After the controls were rebuilt on ui-sdk, every check passed locally: types, unit tests, and the browser test against the dev server. The same browser test against the live URL failed. Bold stayed on, and spaces and line breaks went missing.
+- Reproduced it locally by serving the production build (`vite preview`), where it failed 2 runs out of 2.
+- Cause: ui-sdk moves keyboard focus to the toolbar button that was pressed. TipTap's focus command hands it back one frame later. In the faster production build, the next Space or Enter arrived inside that frame and pressed the button a second time. The dev build was slow enough to hide it.
+- Fix: focus the editor view directly, with no one-frame wait. 3 runs out of 3 on the production build, then 2 out of 2 on the live URL.
+- What I took from it: "tests pass" meant "tests pass against the dev server". The browser test now runs against the live URL after each deploy.
