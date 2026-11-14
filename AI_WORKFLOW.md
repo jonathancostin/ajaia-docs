@@ -3,14 +3,14 @@
 ## Tools
 
 - A terminal coding agent (omp) running Anthropic Claude models. It reads and edits files and runs commands on my dev machine. I direct it, make the product calls, and review what it reports and what the app does.
-- The main session planned the work, wrote the API and owned integration. It started two sub-agents with their own folders: one for the React client, one for file import and export.
+- The main session planned the work, wrote the API and the live-editing server, and owned integration. It started two sub-agents with their own folders: one for the React client, one for file import and export.
 - Playwright for browser checks, with screenshots the agent and I both looked at.
 
 ## Where AI sped the work up
 
 - **Parallel work behind a written contract.** Before any sub-agent started, the main session wrote `src/api.ts` (every route and type the client may call) and `src/lib/extensions.ts` (the one list of editor features). The client, the API and the importers were then built at the same time and fitted together on the first try.
-- **Tests as a table.** The access rules were written as a table first. The agent turned each cell into one assertion against the real Worker and a real database: 5 kinds of user by 10 actions.
-- **Breadth I would not have had time for alone:** .docx import, the save-conflict check, version history, and a full rebuild of the controls on a component library partway through.
+- **Tests as a table.** The access rules were written as a table first. The agent turned each cell into one assertion against the real Worker and a real database.
+- **Breadth I would not have had time for alone:** .docx import, version history, a full rebuild of the controls on a component library partway through, and real-time editing with its own tests in under an hour.
 
 ## What I changed or rejected
 
@@ -59,8 +59,17 @@ Times are minutes into the four hours.
 ### 0:55, a second model's review
 
 - The agent's work is reviewed in the background by other models. Most of what came back was already fixed or out of date. One point was right: in version history, "Keep mine" and "Restore" read the document and then wrote it in two steps. If someone else saved in the few milliseconds between, their save was replaced without being kept as a version.
-- Fixed in the same commit: both writes now only succeed if the row is still the one that was read. Otherwise the user gets the normal conflict message.
+- Fixed in the same commit: both writes then only succeeded if the row was still the one that was read. (Real-time editing later replaced this path: one live room per document is now the only writer.)
 - The same review questioned whether deleting from the list really deleted. It did. A direct check showed the API's count going from 6 to 5.
+
+### 1:10 to 1:45, real-time editing behind a fallback
+
+- I decided to add real-time editing with about three hours left. Before any code, the working version was tagged `v1-submittable` and its deploy kept. The work went on a branch with a cut-off time, and onto a separate staging Worker with its own database. Nothing touched the live site until the three-person browser test had passed twice on staging.
+- **A design point the agent raised before writing code:** the obvious build keeps only the document's JSON and rebuilds the shared state from it when a room restarts. A browser tab that still held the old state would then merge its copy in as new text, and every paragraph would appear twice. So the room stores its Yjs state next to the JSON, and a test restarts the room and reconnects a client that kept its copy.
+- **What I insisted on:** role checks on the socket, not only on the API. The tests send edits from a viewer's socket, and from a viewer whose client claims to be the owner, and check that nobody else receives them and nothing is saved.
+- **What the first test run caught:** all 26 socket tests timed out. At the Worker's compatibility date, a socket receives binary frames as Blobs, and the test client was reading them as ArrayBuffers. A second bug was hiding behind it: the code that reads the saved Yjs state from the database got an empty array for one of the two shapes D1 returns. The restart test caught that one.
+- **A rule that had to change:** version history kept a version "when a different person saves". With two people typing in turn that is one version per second. The room now tracks who has edited since the last kept version, with a test that eight alternating saves produce one version.
+- **Removed, not left behind:** the save-over-HTTP route, the save-conflict banner and their tests went away, because a second way to write a document would race the live room.
 
 ### Smaller ones
 
@@ -71,10 +80,10 @@ Times are minutes into the four hours.
 
 ## How I verified
 
-- **API:** tests run inside the Workers runtime against a real D1 database built from the production migrations. They cover every cell of the access table, that a refused edit changes nothing, role changes taking effect at once, save conflicts, version history and content validation.
+- **API and live editing:** tests run inside the Workers runtime against a real D1 database built from the production migrations, with real sockets into the real Durable Object. They cover every cell of the access table, viewers and forged roles on the socket, role changes closing open sockets, two people typing at once, a room restart, version history and content validation.
 - **Import and export:** tests on real fixture files, including a .docx, plus the rejection cases. Import results are checked against the server's validation schema.
-- **UI:** component tests for the toolbar and share dialog, and a Playwright test of the whole flow (write, reload, share, each role's view, history, import).
-- **Live site:** the Playwright test runs against the deployed URL after each deploy. A fresh clone was installed, seeded, tested and started from the README steps.
+- **UI:** component tests for the toolbar and share dialog, and a Playwright test with three people in three browsers on one document (write, reload, share, live edits and cursors, the viewer unable to type, restore, import).
+- **Staging, then live:** the Playwright test passed twice on a staging copy on Cloudflare before real-time editing was merged, and runs against the live URL after each deploy. A fresh clone was installed, seeded, tested and started from the README steps.
 - **UX:** screenshots from the browser test at each step, and my own pass through the live app as each of the three users.
 
 ## Preparation before the timer

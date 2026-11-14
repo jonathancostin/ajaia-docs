@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import type YProvider from "y-partyserver/provider";
 
 // Each passes 4.5:1 with white text, for the chips and the caret labels.
-const palette = ["#1d4ed8", "#b91c1c", "#047857", "#7e22ce", "#c2410c", "#0f766e"];
+const palette = ["#b91c1c", "#1d4ed8", "#047857", "#c2410c", "#7e22ce", "#0f766e"];
 
 export function userColor(userId: string): string {
-  let hash = 0;
-  for (const char of userId) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  // djb2. Six colours can still collide; this one spreads the demo accounts apart.
+  let hash = 5381;
+  for (const char of userId) hash = ((hash << 5) + hash + char.charCodeAt(0)) >>> 0;
   return palette[hash % palette.length];
 }
 

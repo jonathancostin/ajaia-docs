@@ -37,26 +37,26 @@ The header has a "Switch user" menu for moving between accounts.
 
 - Create, rename, edit, delete and reopen documents, with autosave.
 - Rich text: bold, italic, underline, strikethrough, headings 1 to 3, bulleted and numbered lists, quotes, links.
+- Real-time editing: several people in one document see each other's text, cursors and names as they type. To try it, open the same document as two accounts, one in a private window.
 - Import `.txt`, `.md` and `.docx` files (up to 2 MB) as new editable documents.
 - Share with another user as "Can edit" or "Can view", change the role, remove access. Owned and shared documents are listed separately.
-- Access rules enforced on the server and covered by tests for every role and action.
-- A save over someone else's newer version is refused, with a choice of whose version to keep.
-- Version history: earlier versions are kept, can be read, and can be restored.
+- Access rules enforced on the server, including on the live connection, and covered by tests for every role and action. A viewer's edits are dropped by the server.
+- Version history: earlier versions are kept, can be read, and can be restored for everyone who has the document open.
 - Download a document as Markdown.
 
 ## What is incomplete or left out
 
-- No real-time co-editing or presence. Two people can edit the same document, but they take turns, and the conflict check stops one overwriting the other.
 - No sign-up or email invites. Sharing works between the three seeded accounts.
 - Imported .docx files lose images and tables. Markdown tables are dropped by the parser.
 - No comments, PDF export, folders or search.
+- The name shown on a cursor comes from that person's browser and is not checked by the server. Edits and saves are.
 
 ## What I would build next with another 2 to 4 hours
 
-1. Real-time editing with Yjs in a Cloudflare Durable Object, with presence.
+1. A diff view between two versions, and comments anchored to text.
 2. Link sharing and email invites for people without an account.
 3. Images and tables in documents.
-4. Login rate limiting, and the browser test running against each deploy in CI.
+4. Login rate limiting, and the browser test running against the live URL as a deploy step.
 
 ## Run it locally
 
