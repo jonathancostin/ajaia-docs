@@ -16,7 +16,7 @@ The login page has a one-click button for each account. The password for all thr
 
 The header has a "Switch user" menu, so you can move between accounts without going back to the login page. To see live editing, open the same document as two people: one in a normal window and one in a private window.
 
-![Two people in one document: Bob's cursor is visible to Alice](docs/screenshots/09-realtime.png)
+![Two people in one document: Bob's cursor is visible to Alice](docs/screenshots/08-realtime.png)
 
 | Share dialog | Version history |
 |---|---|
@@ -57,14 +57,18 @@ npm run dev                      # http://127.0.0.1:3410
 ## Tests
 
 ```bash
-npm test            # 106 tests, about 10 seconds
-npm run test:e2e    # the browser test, needs `npm run dev` running in another terminal
+npm test            # 99 tests, about 10 seconds
+npm run test:e2e    # 3 browser tests, needs `npm run dev` running in another terminal
 ```
 
-- `test/worker`: API and live-editing tests that run inside the Workers runtime, against a real D1 database built from the production migrations and real sockets into the real Durable Object. They assert every cell of the access table (5 kinds of user, 9 actions), that a viewer's edits over the socket are dropped, that a forged role is ignored, that role changes close open sockets, that two people typing at once end up with the same text, that a room keeps its state across a restart, version history, and content validation.
+- `test/worker`: API and live-editing tests that run inside the Workers runtime, against a real D1 database built from the production migrations and real sockets into the real Durable Object. They assert every cell of the access table (5 kinds of user, 9 actions), that a viewer's edits over the socket are dropped, that a forged role is ignored, that role changes close open sockets, that two people typing at once end up with the same text, that formatting survives a live edit and save, that a room keeps its state across a restart, version history, and content validation.
 - `test/lib`: file import and export on real fixture files, including a .docx, plus the rejection cases (wrong type, empty, too large, damaged). Import results are checked against the server's own validation rules.
-- `test/ui`: the toolbar and the share dialog as components.
-- `test/e2e`: one Playwright test of the whole flow with three people in three browsers on one document: write and format, reload, share as editor and as viewer, edits and cursors arriving live, the viewer unable to type, a restore reaching the others without a reload, .docx import. Set `E2E_BASE_URL` to run it against any deployed copy. I run it against the live URL after each deploy.
+- `test/e2e`: three Playwright tests in real browsers. Set `E2E_BASE_URL` to run them against any deployed copy. I run them against the live URL after each deploy.
+  - The whole flow with three people in three browsers on one document: write and format, reload, share as editor and as viewer, edits and cursors arriving live, the viewer unable to type, a restore reaching the others without a reload, .docx import.
+  - The owner lowers someone's role, then removes them, while that person has the document open.
+  - Two tabs in one browser: when one switches user, the other follows.
+
+There are no component tests with a mocked API. I removed the ones I had: they only asserted on mocks or repeated what the browser tests prove against the real server.
 
 Every push to `main` runs the build, `npm test` and the browser test against the production build (`.github/workflows/ci.yml`, on a self-hosted runner).
 
@@ -100,7 +104,7 @@ worker/              Cloudflare Worker (Hono)
   db/schema.ts       tables (Drizzle)
 migrations/          SQL migrations and the seed data
 scripts/             seed generator, and a script that resets the demo data
-test/                API, import, component and browser tests
+test/                API and live-editing, import, and browser tests
 ```
 
 ## Other documents

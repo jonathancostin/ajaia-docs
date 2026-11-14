@@ -103,6 +103,8 @@ The result is posted as a normal new document. I chose the browser because the c
 
 Three seeded accounts with a one-click sign-in on the login page, because reviewers need to switch users to see sharing work. Underneath it is a real flow: passwords are hashed with PBKDF2-SHA256 through Web Crypto, and the session is a signed, httpOnly, SameSite=Lax cookie. Writes and sockets from another origin are refused.
 
+A browser holds one session for all its tabs. When one tab signs in as someone else, the others follow at once (`src/session.tsx`), so no tab shows one person's name and rights while the server treats it as another. The document's role is fetched per user and never cached across users. Being two people at once needs a private window or a second browser, and the login page says so.
+
 Password hashing strength was measured on the deployed platform before choosing it, with a throwaway Worker called 25 times per setting:
 
 | PBKDF2 iterations | CPU average | CPU max |

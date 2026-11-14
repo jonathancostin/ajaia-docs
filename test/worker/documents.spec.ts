@@ -13,8 +13,28 @@ const stored = async (id: string) => {
   return ((await response.json()) as { document: { content: unknown; version: number } }).document;
 };
 
+interface ContentNode {
+  type: string;
+  text?: string;
+  attrs?: Record<string, unknown>;
+  marks?: { type: string; attrs?: Record<string, unknown> }[];
+  content?: ContentNode[];
+}
+
+/** Every node in order, with the formatting a reader would see: heading levels, marks and link targets. */
+const formatting = (node: ContentNode): string[] => {
+  const marks = (node.marks ?? []).map((mark) => (mark.type === "link" ? `link ${mark.attrs?.href}` : mark.type));
+  const self =
+    node.type === "text"
+      ? `"${node.text}" ${marks.sort().join("+")}`.trim()
+      : node.type === "heading"
+        ? `heading ${node.attrs?.level}`
+        : node.type;
+  return [self, ...(node.content ?? []).flatMap(formatting)];
+};
+
 describe("saving", () => {
-  it("keeps formatting exactly as the editor sent it", async () => {
+  it("keeps every kind of formatting through a live edit and a save", async () => {
     const content = {
       type: "doc",
       content: [
@@ -46,8 +66,14 @@ describe("saving", () => {
     const created = await call("POST", "/documents", { cookie: cookies.owner, body: { title: "Formats", content } });
     expect(created.status).toBe(201);
     const { document } = (await created.json()) as { document: { id: string } };
-    const reopened = await call("GET", `/documents/${document.id}`, { cookie: cookies.owner });
-    expect(((await reopened.json()) as { document: { content: unknown } }).document.content).toEqual(content);
+
+    // The room turns the stored document into its shared form and back when it saves.
+    const alice = await openRoom(document.id, cookies.owner);
+    alice.type("added later");
+    await alice.saved();
+
+    const saved = (await stored(document.id)).content as ContentNode;
+    expect(formatting(saved)).toEqual([...formatting(content), "paragraph", '"added later"']);
   });
 });
 

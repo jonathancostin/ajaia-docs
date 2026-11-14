@@ -1,5 +1,4 @@
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
-import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig(async () => {
@@ -23,16 +22,6 @@ export default defineConfig(async () => {
         {
           // File import and export are plain functions. They run in Node with a DOM.
           test: { name: "lib", environment: "happy-dom", include: ["test/lib/**/*.spec.ts"] },
-        },
-        {
-          // UI wiring and the agent bridge, rendered with React in jsdom.
-          plugins: [react()],
-          test: {
-            name: "ui",
-            environment: "jsdom",
-            include: ["test/ui/**/*.spec.tsx"],
-            setupFiles: ["test/ui/setup.ts"],
-          },
         },
       ],
     },

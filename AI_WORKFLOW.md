@@ -71,6 +71,13 @@ Times are minutes into the four hours.
 - **A rule that had to change:** version history kept a version "when a different person saves". With two people typing in turn that is one version per second. The room now tracks who has edited since the last kept version, with a test that eight alternating saves produce one version.
 - **Removed, not left behind:** the save-over-HTTP route, the save-conflict banner and their tests went away, because a second way to write a document would race the live room.
 
+### 1:45, a bug I found by using it
+
+- With real-time editing live and every test green, I opened the app in two normal windows and switched user in one. The other window showed a person's cursor but would not let them type: "You can view this document but not edit it."
+- Cause: a browser holds one sign-in for all its windows. Switching user in one window changed who the other window was, but that window kept the old name and the old rights on screen. The tests never saw it, because each test user had a separate browser.
+- The agent reproduced it with two tabs in one browser before changing anything. Fix: every tab follows the browser's sign-in at once, and the document's access is never cached across users. There is now a browser test with two tabs in one browser.
+- What I took from it: the test suite modelled three people on three machines. A reviewer is one person with several windows.
+
 ### Smaller ones
 
 - mammoth reads `arrayBuffer` in the browser and `buffer` in Node. Code that passed one failed in the other. The converter passes both so the same function runs in the browser and under test.
@@ -82,8 +89,9 @@ Times are minutes into the four hours.
 
 - **API and live editing:** tests run inside the Workers runtime against a real D1 database built from the production migrations, with real sockets into the real Durable Object. They cover every cell of the access table, viewers and forged roles on the socket, role changes closing open sockets, two people typing at once, a room restart, version history and content validation.
 - **Import and export:** tests on real fixture files, including a .docx, plus the rejection cases. Import results are checked against the server's validation schema.
-- **UI:** component tests for the toolbar and share dialog, and a Playwright test with three people in three browsers on one document (write, reload, share, live edits and cursors, the viewer unable to type, restore, import).
-- **Staging, then live:** the Playwright test passed twice on a staging copy on Cloudflare before real-time editing was merged, and runs against the live URL after each deploy. A fresh clone was installed, seeded, tested and started from the README steps.
+- **UI:** three Playwright tests in real browsers: three people on one document (write, reload, share, live edits and cursors, the viewer unable to type, restore, import), a role change while the document is open, and two tabs in one browser.
+- **Tests I removed:** at the end I went through the suite and deleted the component tests that ran against a mocked API. They asserted on the mocks or repeated what the browser tests already prove against the real server. One server test only checked that stored JSON came back unchanged. It now sends the content through a live edit and a save first.
+- **Staging, then live:** the Playwright test passed twice on a staging copy on Cloudflare before real-time editing was merged, and the browser tests run against the live URL after each deploy. A fresh clone was installed, seeded, tested and started from the README steps.
 - **UX:** screenshots from the browser test at each step, and my own pass through the live app as each of the three users.
 
 ## Preparation before the timer

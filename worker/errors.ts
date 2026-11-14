@@ -5,7 +5,6 @@ export type ErrorCode =
   | "invalid_credentials"
   | "forbidden"
   | "not_found"
-  | "conflict"
   | "invalid"
   | "too_large";
 
