@@ -16,6 +16,14 @@ The login page has a one-click button for each account. The password for all thr
 
 The header has a "Switch user" menu, so you can move between accounts without going back to the login page.
 
+![The editor with a formatted document](docs/screenshots/03-editor.png)
+
+| Share dialog | Version history |
+|---|---|
+| ![Share dialog with an editor and a viewer](docs/screenshots/04-share-dialog.png) | ![Version history with a preview and a restore button](docs/screenshots/06-version-history.png) |
+
+More screens are in [docs/screenshots](docs/screenshots): login, document list, the read-only view, a save conflict, and an imported .docx.
+
 ## What works
 
 - **Documents:** create, rename, edit, delete, reopen. Changes save on their own about a second after you stop typing, with a Saving and Saved indicator.
