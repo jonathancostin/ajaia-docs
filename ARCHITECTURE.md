@@ -4,9 +4,11 @@
 
 1. **A deployed app from minute ten.** A health route that reads the database went live before any feature. Every later step was deployed and checked on the live URL.
 2. **Access rules that hold on the server.** Sharing is the part of a document tool that goes wrong quietly. One module decides who can do what, and a test asserts every cell of the access table.
-3. **An editor that does not lose work.** Autosave with a visible state, and a save over someone else's newer version is refused instead of silently overwriting it.
+3. **An editor that does not lose work.** Autosave with a visible state, a save over someone else's newer version is refused instead of silently overwriting it, and earlier versions can be restored.
 4. **File import that keeps structure.** .docx, .md and .txt become normal editable documents with headings, lists and inline formatting intact.
 5. Everything else was cut. See "Cut on purpose" below.
+
+The one stretch item I chose was version history, because it finishes the "does not lose work" story. View and edit roles were part of the sharing design from the start. Markdown export came almost free with the Markdown importer.
 
 ## Shape
 
@@ -14,10 +16,10 @@
 flowchart LR
   B[Browser: React, TipTap] -- "/api/* JSON, session cookie" --> W[Cloudflare Worker: Hono]
   B -- "everything else" --> A[Static assets on Cloudflare]
-  W --> D[(D1: users, documents, document_shares)]
+  W --> D[(D1: users, documents, document_shares, document_versions)]
 ```
 
-- **Client** (`src/`): a React single-page app. TipTap is the editor. TanStack Query holds server state. `src/api.ts` is the only file that calls the API.
+- **Client** (`src/`): a React single-page app. TipTap is the editor. TanStack Query holds server state. Controls (toolbar, dialogs, menus, selects) are ui-sdk components, which bring keyboard and screen-reader behaviour, themed in `src/index.css`. `src/api.ts` is the only file that calls the API.
 - **API** (`worker/`): a Hono app on a Cloudflare Worker. Routes parse the body with zod, call the access module, then read or write through Drizzle.
 - **Database**: Cloudflare D1 (SQLite). Migrations in `migrations/` are plain SQL generated from `worker/db/schema.ts`. Local development and the tests use the D1 emulator that ships with wrangler, so nobody needs a Cloudflare account to run the project.
 - **Deploy**: `npm run deploy` builds the client and uploads the client, the Worker and its config in one step. Cloudflare serves the static files itself, and only `/api/*` runs the Worker.
@@ -106,4 +108,4 @@ The app uses 100,000. The account is on the Workers Paid plan, where the CPU lim
 2. A diff view between two versions, and named versions.
 3. Link sharing ("anyone with the link can view") and email invites for people without an account.
 4. Images in documents, stored in R2, and tables.
-5. Rate limiting on login, and a Playwright run against the deployed URL in CI.
+5. Rate limiting on login, and running the browser test against the live URL as a deploy step, not by hand.

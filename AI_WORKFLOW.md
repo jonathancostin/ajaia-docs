@@ -47,7 +47,14 @@ Times are minutes into the four hours.
 - Reproduced by serving the production build locally, where it failed 2 runs out of 2.
 - Cause: the component library moves focus to the pressed button. The editor took it back one frame later. In the faster production build, the next Space or Enter landed inside that frame and pressed the button again.
 - Fixed by focusing the editor directly. 3 out of 3 on the production build, then 2 out of 2 on the live URL.
-- Lesson kept: "tests pass" had meant "tests pass against the dev server". The browser test now runs against the live URL after each deploy.
+- Lesson kept: "tests pass" had meant "tests pass against the dev server".
+
+### 0:45, a fix that broke its neighbour
+
+- With that fix working, the agent applied the same change to the text style menu "for consistency" and deployed without the production-build check. The live browser test failed again: text typed after choosing "Heading 1" vanished.
+- Cause: that menu hands focus back to its own button as it closes, after our code ran, so the direct focus was undone. The delayed focus it replaced had been correct there.
+- Reverted that one line and left a comment saying why it must stay.
+- Process change: every later change was tested against a local production build before deploying (5 runs out of 5 for this one), and CI now runs the browser test against the production build on every push.
 
 ### Smaller ones
 

@@ -49,12 +49,16 @@ npm run dev                      # http://127.0.0.1:3410
 ## Tests
 
 ```bash
-npm test
+npm test            # 101 tests, about 10 seconds
+npm run test:e2e    # the browser test, needs `npm run dev` running in another terminal
 ```
 
-- `test/worker`: API tests that run inside the Workers runtime against a real D1 database built from the production migrations. They assert every cell of the access table (5 kinds of user, 10 actions), that a refused edit changes nothing, that role changes take effect at once, version conflicts, version history, and content validation.
-- `test/lib`: file import and export on real fixture files, including a .docx, plus the rejection cases (wrong type, empty, too large, damaged).
-- `test/e2e`: one browser test of the main flow with Playwright. Run it with `npm run test:e2e` while `npm run dev` is running.
+- `test/worker`: API tests that run inside the Workers runtime against a real D1 database built from the production migrations. They assert every cell of the access table (5 kinds of user, 10 actions), that a refused edit changes nothing, that role changes take effect at once, save conflicts, version history, and content validation.
+- `test/lib`: file import and export on real fixture files, including a .docx, plus the rejection cases (wrong type, empty, too large, damaged). Import results are checked against the server's own validation rules.
+- `test/ui`: the toolbar and the share dialog as components.
+- `test/e2e`: one Playwright test of the whole flow in a real browser: write and format, reload, share as editor and as viewer, each role's view, version history and restore, .docx import. Set `E2E_BASE_URL` to run it against any deployed copy. I run it against the live URL after each deploy.
+
+Every push to `main` runs the build, `npm test` and the browser test against the production build (`.github/workflows/ci.yml`, on a self-hosted runner).
 
 ## Deploy
 
@@ -72,9 +76,10 @@ npm run deploy
 src/                 React client
   api.ts             the only file that calls the API, with all shared types
   pages/             login, document list, editor
-  components/        header, toolbar, share dialog
+  components/        header, toolbar, share dialog, version history
   hooks/             autosave
   lib/               editor extensions, file import, Markdown export
+  index.css          theme for the ui-sdk components, and the document styles
 worker/              Cloudflare Worker (Hono)
   access.ts          who can do what to a document. Every route calls it
   content.ts         validation of document content
@@ -83,7 +88,8 @@ worker/              Cloudflare Worker (Hono)
   routes/            auth, documents, shares and version history
   db/schema.ts       tables (Drizzle)
 migrations/          SQL migrations and the seed data
-test/                API, import and browser tests
+scripts/             seed generator, and a script that resets the demo data
+test/                API, import, component and browser tests
 ```
 
 ## Other documents
