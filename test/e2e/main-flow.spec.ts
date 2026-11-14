@@ -83,8 +83,10 @@ test("write, reload, share as editor and viewer, import a .docx", async ({ page 
   await expect(sharedWithBob.getByRole("link", { name: new RegExp(title) })).toContainText("Can edit");
   await shot(page, "05-bob-list");
   await sharedWithBob.getByRole("link", { name: new RegExp(title) }).click();
-  await content.click();
-  await page.keyboard.press("Control+End");
+  // A click on the empty part of the sheet puts the cursor at the end of the document.
+  const sheet = content.locator("xpath=../..");
+  const sheetBox = (await sheet.boundingBox())!;
+  await sheet.click({ position: { x: 24, y: sheetBox.height - 24 } });
   await page.keyboard.press("Enter");
   await page.keyboard.type("Bob was here");
   await expect(page.getByText("Saved", { exact: true })).toBeVisible();
@@ -98,6 +100,31 @@ test("write, reload, share as editor and viewer, import a .docx", async ({ page 
   await expect(content).toHaveAttribute("contenteditable", "false");
   await expect(page.getByLabel("Document title")).not.toBeEditable();
   await shot(page, "06-carol-view");
+
+  // Alice opens the history and restores her version from before Bob's edit.
+  await switchUser(page, "Alice Nguyen");
+  await expect(content).toContainText("Bob was here");
+  await page.getByRole("button", { name: "History" }).click();
+  const history = page.getByRole("dialog", { name: "Version history" });
+  await history.getByRole("option", { name: /by Alice Nguyen/ }).first().click();
+  const preview = history.getByRole("region", { name: "Version preview" });
+  await expect(preview).toContainText("Second step");
+  await expect(preview).not.toContainText("Bob was here");
+  await shot(page, "08-history");
+  await history.getByRole("button", { name: "Restore this version" }).click();
+  await expect(history).toHaveCount(0);
+  await expect(content).toContainText("Second step");
+  await expect(content).not.toContainText("Bob was here");
+  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+
+  // Carol can read the history but not restore from it.
+  await switchUser(page, "Carol Diaz");
+  await page.getByRole("button", { name: "History" }).click();
+  await expect(history.getByRole("option").first()).toBeVisible();
+  await expect(history.getByText("You can view earlier versions but not restore them.")).toBeVisible();
+  await expect(history.getByRole("button", { name: "Restore this version" })).toHaveCount(0);
+  await history.getByRole("button", { name: "Close" }).click();
+  await expect(history).toHaveCount(0);
 
   // Import a real .docx as a new document.
   await page.goto("/");

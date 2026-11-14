@@ -27,6 +27,7 @@ export function useAutosave(options: {
   const { id } = options;
   const [status, setStatus] = useState<SaveStatus>("saved");
   const [conflict, setConflict] = useState<ApiError | null>(null);
+  const [error, setError] = useState<unknown>(null);
 
   const versionRef = useRef(options.version);
   const dirtyRef = useRef(false);
@@ -57,6 +58,7 @@ export function useAutosave(options: {
           });
           versionRef.current = document.version;
           callbacksRef.current.onSaved(document);
+          setError(null);
         } catch (error) {
           dirtyRef.current = true;
           if (error instanceof ApiError && error.code === "conflict") {
@@ -65,6 +67,7 @@ export function useAutosave(options: {
             setStatus("conflict");
           } else {
             handleApiError(error);
+            setError(error);
             setStatus("error");
           }
           return;
@@ -103,6 +106,7 @@ export function useAutosave(options: {
     dirtyRef.current = false;
     stoppedRef.current = false;
     setConflict(null);
+    setError(null);
     setStatus("saved");
   }, []);
 
@@ -124,5 +128,5 @@ export function useAutosave(options: {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, []);
 
-  return { status, conflict, markDirty, retry: save, keepMine, acceptVersion };
+  return { status, conflict, error, markDirty, retry: save, keepMine, acceptVersion };
 }

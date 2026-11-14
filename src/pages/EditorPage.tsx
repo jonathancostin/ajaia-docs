@@ -8,8 +8,9 @@ import { Download } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { api, ApiError } from "../api";
-import type { DocumentDetail } from "../api";
+import type { DocumentDetail, ErrorCode } from "../api";
 import { Header } from "../components/Header";
+import { HistoryDialog } from "../components/HistoryDialog";
 import { ShareDialog } from "../components/ShareDialog";
 import { Toolbar } from "../components/Toolbar";
 import { useAutosave } from "../hooks/useAutosave";
@@ -67,11 +68,16 @@ const statusText: Record<Exclude<SaveStatus, "error">, string> = {
   conflict: "Unsaved changes",
 };
 
+// Retrying cannot fix these, so the server's own message is shown instead of a retry button.
+const finalErrors: Partial<Record<ErrorCode, true>> = { forbidden: true, invalid: true, too_large: true, not_found: true };
+
 function DocumentEditor({ initial }: { initial: DocumentDetail }) {
   const queryClient = useQueryClient();
+  const user = useUser();
   const canEdit = initial.role !== "viewer";
   const isOwner = initial.role === "owner";
   const [title, setTitle] = useState(initial.title);
+  const [edited, setEdited] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const titleRef = useRef(initial.title);
   // Kept from the last update so a save on unmount does not need the editor.
@@ -102,19 +108,24 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
     },
     onUpdate: ({ editor }) => {
       contentRef.current = editor.state.doc;
+      setEdited(true);
       markDirty();
     },
   });
 
+  function replaceDocument(document: DocumentDetail) {
+    editor.commands.setContent(document.content, { emitUpdate: false });
+    contentRef.current = editor.state.doc;
+    titleRef.current = document.title;
+    setTitle(document.title);
+    setEdited(true);
+    autosave.acceptVersion(document.version);
+  }
+
   async function loadTheirVersion() {
     setActionError(null);
     try {
-      const { document: latest } = await api.getDocument(initial.id);
-      editor.commands.setContent(latest.content, { emitUpdate: false });
-      contentRef.current = editor.state.doc;
-      titleRef.current = latest.title;
-      setTitle(latest.title);
-      autosave.acceptVersion(latest.version);
+      replaceDocument((await api.getDocument(initial.id)).document);
     } catch (error) {
       handleApiError(error);
       setActionError(error instanceof Error ? error.message : "Could not load the latest version.");
@@ -138,7 +149,8 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
     }
   }
 
-  const { status, conflict } = autosave;
+  const { status, conflict, error: saveError } = autosave;
+  const lastEditor = !edited && initial.updatedBy && initial.updatedBy.id !== user.id ? initial.updatedBy : null;
 
   return (
     <>
@@ -155,15 +167,21 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
                 onValueChange={(value) => {
                   titleRef.current = value;
                   setTitle(value);
+                  setEdited(true);
                   markDirty();
                 }}
               />
             </Field>
             <div className="flex flex-wrap gap-x-3 text-sm text-slate-500">
               {!isOwner && <span>Owned by {initial.owner.name}</span>}
+              {lastEditor && <span>Last edited by {lastEditor.name}</span>}
               {canEdit && (
                 <span aria-live="polite">
-                  {status === "error" ? (
+                  {status !== "error" ? (
+                    statusText[status]
+                  ) : saveError instanceof ApiError && finalErrors[saveError.code] ? (
+                    <span className="text-red-700">{saveError.message}</span>
+                  ) : (
                     <span className="text-red-700">
                       Could not save.{" "}
                       <Button
@@ -173,15 +191,20 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
                         Retry
                       </Button>
                     </span>
-                  ) : (
-                    statusText[status]
                   )}
                 </span>
               )}
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <ShareDialog documentId={initial.id} isOwner={isOwner} />
+            <HistoryDialog
+              documentId={initial.id}
+              currentTitle={title}
+              canRestore={canEdit}
+              beforeRestore={autosave.retry}
+              onRestored={replaceDocument}
+            />
             <Button onClick={downloadMarkdown}>
               <Download aria-hidden />
               Download as Markdown
@@ -218,7 +241,14 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
               {actionError}
             </p>
           )}
-          <div className="rounded-sm border border-slate-200 bg-white px-5 py-8 shadow-sm sm:px-16 sm:py-14">
+          <div
+            className="min-h-[60vh] rounded-sm border border-slate-200 bg-white px-5 py-8 shadow-sm sm:px-16 sm:py-14"
+            onMouseDown={(event) => {
+              if (!canEdit || event.target !== event.currentTarget) return;
+              event.preventDefault();
+              editor.commands.focus("end");
+            }}
+          >
             <EditorContent editor={editor} />
           </div>
         </div>

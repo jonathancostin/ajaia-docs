@@ -48,11 +48,20 @@ body {
 }
 
 .ProseMirror {
-  min-height: 60vh;
+  --tw-prose-bullets: var(--color-slate-500);
+  --tw-prose-counters: var(--color-slate-600);
   outline: none;
   overflow-wrap: break-word;
 }
 
 .ProseMirror > :first-child {
   margin-top: 0;
+}
+
+.ProseMirror li {
+  margin-block: 0.25em;
+}
+
+.ProseMirror li > p {
+  margin-block: 0;
 }

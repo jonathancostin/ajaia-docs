@@ -23,3 +23,14 @@ export function formatRelativeTime(timestamp: number, now = Date.now()): string 
   }
   return "just now";
 }
+
+const dateTimeFormat = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+export function formatDateTime(timestamp: number): string {
+  return dateTimeFormat.format(timestamp);
+}
