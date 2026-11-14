@@ -104,8 +104,10 @@ export function Toolbar({ editor }: { editor: Editor }) {
             else if (value) editor.chain().setHeading({ level: Number(value) as 1 | 2 | 3 }).run();
           }}
           onOpenChangeComplete={(open) => {
-            // The list returns focus to its trigger as it closes; after a choice, typing belongs in the document.
-            if (!open && blockChosen.current) editor.view.focus();
+            // The list returns focus to its trigger as it closes; after a choice, typing belongs in the
+            // document. This one must be TipTap's delayed focus: a direct focus here runs before the
+            // list's own, and the trigger takes focus back.
+            if (!open && blockChosen.current) editor.commands.focus();
             blockChosen.current = false;
           }}
         >

@@ -1,0 +1,40 @@
+name: CI
+
+# Runs on a self-hosted runner. This repository is public, so the workflow is
+# triggered by pushes to main only and never by pull requests: code from a fork
+# must not run on the runner.
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: [self-hosted, anvil, ajaia]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: cp .dev.vars.example .dev.vars
+      # Type-checks the client and the Worker, then builds both.
+      - run: npm run build
+      # API tests in the Workers runtime with a real D1 database, plus import and UI tests.
+      - run: npm test
+      # The browser test runs against the production build, not the dev server.
+      # One bug in this project only showed up in the production build.
+      - run: npx playwright install chromium
+      - run: npm run db:local
+      - name: Browser test against the production build
+        run: |
+          npx vite preview --host 127.0.0.1 --port 43117 --strictPort &
+          for attempt in $(seq 1 30); do
+            curl -sf http://127.0.0.1:43117/api/health && break
+            sleep 1
+          done
+          E2E_BASE_URL=http://127.0.0.1:43117 npm run test:e2e
