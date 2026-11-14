@@ -10,6 +10,7 @@ import {
   markdownToDoc,
   textToDoc,
 } from "../../src/lib/import";
+import { contentSchema } from "../../worker/content";
 
 // Vitest runs from the repo root; import.meta.url is not a file URL under happy-dom.
 const fixture = (name: string) => readFileSync(`test/fixtures/${name}`);
@@ -109,6 +110,59 @@ describe("htmlToDoc", () => {
       "text",
     ]);
   });
+});
+
+// The real server check, so an import that the API would refuse fails here.
+const serverAccepts = (doc: JSONContent) => contentSchema.safeParse(doc).success;
+
+const allText = (doc: JSONContent) =>
+  nodes(doc)
+    .flatMap((node) => (node.type === "text" ? [node.text] : []))
+    .join("|");
+
+// The editor schema only allows text inside paragraphs and headings.
+const textOutsideBlocks = (doc: JSONContent) =>
+  nodes(doc).some(
+    (node) =>
+      ["doc", "listItem", "blockquote"].includes(node.type ?? "") &&
+      node.content?.some((child) => child.type === "text" || child.type === "hardBreak"),
+  );
+
+describe("imported content the server would refuse", () => {
+  it.each([
+    ["a level 4 heading", "#### Deep heading", "Deep heading"],
+    ["a relative link", "[rel](./other.md)", "rel"],
+    ["a javascript link", "[js](javascript:alert(1))", "js"],
+    ["an image", "![alt](pic.png)", "alt"],
+    ["a table", "| a | b |\n|---|---|\n| 1 | 2 |", ""],
+    ["a task list", "- [ ] item\n- [x] done", "item|done"],
+  ])("keeps the text of %s and passes the server check", (_label, markdown, text) => {
+    const doc = markdownToDoc(markdown);
+    expect(serverAccepts(doc)).toBe(true);
+    expect(allText(doc)).toBe(text);
+    expect(markedText(doc, "link")).toEqual([]);
+    expect(textOutsideBlocks(doc)).toBe(false);
+  });
+
+  it("keeps a task list as a bulleted list", () => {
+    expect(listItems(markdownToDoc("- [ ] item\n- [x] done"), "bulletList")).toEqual(["item", "done"]);
+  });
+
+  it("keeps safe links", () => {
+    const doc = markdownToDoc("[ok](https://example.com) and [mail](mailto:a@example.com)");
+    expect(serverAccepts(doc)).toBe(true);
+    expect(markedText(doc, "link")).toEqual(["ok", "mail"]);
+  });
+
+  it.each(['<a href="#bookmark">x</a>', '<a href="javascript:alert(1)">x</a>'])(
+    "drops the link but keeps the text of %s",
+    (html) => {
+      const doc = htmlToDoc(html);
+      expect(serverAccepts(doc)).toBe(true);
+      expect(allText(doc)).toBe("x");
+      expect(markedText(doc, "link")).toEqual([]);
+    },
+  );
 });
 
 describe("importFile", () => {

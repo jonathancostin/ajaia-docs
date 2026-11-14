@@ -3,9 +3,14 @@
 // The server allows the same node and mark types (worker/content.ts).
 import StarterKit from "@tiptap/starter-kit";
 
+export const HEADING_LEVELS = [1, 2, 3] as const;
+
+/** The server refuses any other link, so the editor must never produce one. */
+export const isSafeLink = (href: string) => /^(https?:\/\/|mailto:)/i.test(href);
+
 export const editorExtensions = [
   StarterKit.configure({
-    heading: { levels: [1, 2, 3] },
-    link: { openOnClick: false, autolink: true, protocols: ["http", "https", "mailto"] },
+    heading: { levels: [...HEADING_LEVELS] },
+    link: { openOnClick: false, autolink: true, isAllowedUri: isSafeLink },
   }),
 ];

@@ -14,7 +14,8 @@
     "typecheck": "tsc -b",
     "db:generate": "drizzle-kit generate",
     "db:local": "wrangler d1 migrations apply ajaia-docs --local",
-    "db:remote": "wrangler d1 migrations apply ajaia-docs --remote"
+    "db:remote": "wrangler d1 migrations apply ajaia-docs --remote",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.9.1",
