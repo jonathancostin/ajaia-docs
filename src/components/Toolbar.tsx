@@ -105,7 +105,7 @@ export function Toolbar({ editor }: { editor: Editor }) {
           }}
           onOpenChangeComplete={(open) => {
             // The list returns focus to its trigger as it closes; after a choice, typing belongs in the document.
-            if (!open && blockChosen.current) editor.commands.focus();
+            if (!open && blockChosen.current) editor.view.focus();
             blockChosen.current = false;
           }}
         >

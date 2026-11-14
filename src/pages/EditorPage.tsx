@@ -246,7 +246,9 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
             onMouseDown={(event) => {
               if (!canEdit || event.target !== event.currentTarget) return;
               event.preventDefault();
-              editor.commands.focus("end");
+              // Not editor.commands.focus("end"): that waits a frame, and keys typed in that frame are lost.
+              editor.commands.setTextSelection(editor.state.doc.content.size);
+              editor.view.focus();
             }}
           >
             <EditorContent editor={editor} />
