@@ -1,0 +1,21 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "ajaia-docs",
+	"main": "worker/index.ts",
+	"compatibility_date": "2026-11-13",
+	// Static files are served without running the Worker. Only /api/* reaches it.
+	"assets": {
+		"not_found_handling": "single-page-application",
+		"run_worker_first": ["/api/*"]
+	},
+	"observability": { "enabled": true },
+	"upload_source_maps": true,
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "ajaia-docs",
+			"database_id": "bb5ae44b-0e60-4e95-afb6-21a193513997",
+			"migrations_dir": "migrations"
+		}
+	]
+}
