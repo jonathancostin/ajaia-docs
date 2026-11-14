@@ -41,3 +41,27 @@ Working notes, kept while building. Times are minutes into the timer.
 
 - API: 54 tests run inside the Workers runtime against a real D1 database built from the production migrations. They cover every cell of the access table, version conflicts and content validation.
 - Import and export: 12 tests on real fixture files, including a .docx.
+
+## Log, continued (to merge into the log above in the final pass)
+
+### 0:15, the browser test found a bug no unit test would
+
+- The generated toolbar looked right and type-checked. The first Playwright run typed "Ship it" after clicking Bold and the document said "it", not bold. The page screenshot showed three places where characters and line breaks had gone missing.
+- Cause: a mouse click moved focus from the document to the toolbar button. TipTap gives focus back on the next animation frame. Keys pressed in between went to the button, and the pending bold was dropped when focus returned.
+- Fix: the toolbar cancels the mouse-down so focus never leaves the document. A person typing fast after a click would have hit this.
+
+### 0:15, "Cloudflare is down"
+
+- Mid-build the dev preview stopped answering and Cloudflare's status page showed Workers as degraded. The first reaction was to move hosts.
+- Before moving, the agent checked three things: a fresh deploy (went through), the live URL (served the app, sign-in worked), and the local dev server (hung). The problem was local: a leftover dev server process held the port, so the preview proxy pointed at a dead process.
+- Decision: no migration. A move would have cost about 40 minutes and two new accounts to fix something that was not broken.
+
+### 0:17, a dev-only failure in the import step
+
+- The browser test's .docx import did nothing on the first run and passed on the second. Vite found mammoth for the first time at that moment, rebuilt its dependency cache and reloaded the page, which dropped the import. Production was never affected. `vite.config.ts` now pre-bundles mammoth so a fresh clone does not hit this on its first import.
+
+### 0:18, import results the server would have refused
+
+- Reviewing the sub-agent's import code against the server rules showed a gap neither side's tests covered: a Markdown file with a relative link (`[x](./other.md)`) converts to a link the server rejects, so the whole import would fail with a 400.
+- Fix: one normalising pass after every converter (unsafe links keep their text and lose the link, unknown nodes are unwrapped), and the import tests now run each result through the server's own validation schema. The editor's link rule and the server's link rule are the same function's worth of logic.
+- Known limit found the same way: TipTap's Markdown parser drops tables, including their text.

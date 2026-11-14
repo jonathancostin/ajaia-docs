@@ -33,3 +33,6 @@ dist-ssr
 # test output
 test-results
 playwright-report
+
+# working notes for the walkthrough video
+VIDEO_NOTES.md
