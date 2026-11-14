@@ -53,14 +53,23 @@ export function Toolbar({ editor }: { editor: Editor }) {
   });
   const blockChosen = useRef(false);
 
+  // ui-sdk moves focus to the button that was pressed. TipTap's own focus
+  // command gives it back a frame later, and in that frame a Space or Enter
+  // presses the button again instead of reaching the document. Focusing the
+  // view directly leaves no gap.
+  const apply = (command: () => boolean) => {
+    command();
+    editor.view.focus();
+  };
+
   const toggles: { label: string; shortcut: string; icon: LucideIcon; active: boolean; run: () => void }[] = [
-    { label: "Bold", shortcut: "mod+b", icon: Bold, active: state.bold, run: () => editor.chain().focus().toggleBold().run() },
-    { label: "Italic", shortcut: "mod+i", icon: Italic, active: state.italic, run: () => editor.chain().focus().toggleItalic().run() },
-    { label: "Underline", shortcut: "mod+u", icon: Underline, active: state.underline, run: () => editor.chain().focus().toggleUnderline().run() },
-    { label: "Strikethrough", shortcut: "mod+shift+s", icon: Strikethrough, active: state.strike, run: () => editor.chain().focus().toggleStrike().run() },
-    { label: "Bulleted list", shortcut: "mod+shift+8", icon: List, active: state.bulletList, run: () => editor.chain().focus().toggleBulletList().run() },
-    { label: "Numbered list", shortcut: "mod+shift+7", icon: ListOrdered, active: state.orderedList, run: () => editor.chain().focus().toggleOrderedList().run() },
-    { label: "Quote", shortcut: "mod+shift+b", icon: Quote, active: state.blockquote, run: () => editor.chain().focus().toggleBlockquote().run() },
+    { label: "Bold", shortcut: "mod+b", icon: Bold, active: state.bold, run: () => apply(() => editor.chain().toggleBold().run()) },
+    { label: "Italic", shortcut: "mod+i", icon: Italic, active: state.italic, run: () => apply(() => editor.chain().toggleItalic().run()) },
+    { label: "Underline", shortcut: "mod+u", icon: Underline, active: state.underline, run: () => apply(() => editor.chain().toggleUnderline().run()) },
+    { label: "Strikethrough", shortcut: "mod+shift+s", icon: Strikethrough, active: state.strike, run: () => apply(() => editor.chain().toggleStrike().run()) },
+    { label: "Bulleted list", shortcut: "mod+shift+8", icon: List, active: state.bulletList, run: () => apply(() => editor.chain().toggleBulletList().run()) },
+    { label: "Numbered list", shortcut: "mod+shift+7", icon: ListOrdered, active: state.orderedList, run: () => apply(() => editor.chain().toggleOrderedList().run()) },
+    { label: "Quote", shortcut: "mod+shift+b", icon: Quote, active: state.blockquote, run: () => apply(() => editor.chain().toggleBlockquote().run()) },
   ];
 
   return (
@@ -76,12 +85,12 @@ export function Toolbar({ editor }: { editor: Editor }) {
         }}
       >
         <WithTooltip label="Undo" shortcut="mod+z">
-          <ToolbarButton aria-label="Undo" disabled={!state.canUndo} onClick={() => editor.chain().focus().undo().run()}>
+          <ToolbarButton aria-label="Undo" disabled={!state.canUndo} onClick={() => apply(() => editor.chain().undo().run())}>
             <Undo2 aria-hidden />
           </ToolbarButton>
         </WithTooltip>
         <WithTooltip label="Redo" shortcut="mod+shift+z">
-          <ToolbarButton aria-label="Redo" disabled={!state.canRedo} onClick={() => editor.chain().focus().redo().run()}>
+          <ToolbarButton aria-label="Redo" disabled={!state.canRedo} onClick={() => apply(() => editor.chain().redo().run())}>
             <Redo2 aria-hidden />
           </ToolbarButton>
         </WithTooltip>
