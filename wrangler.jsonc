@@ -17,5 +17,28 @@
 			"database_id": "bb5ae44b-0e60-4e95-afb6-21a193513997",
 			"migrations_dir": "migrations"
 		}
-	]
+	],
+	// One live room per document (worker/room.ts).
+	"durable_objects": {
+		"bindings": [{ "name": "DOCUMENT_ROOM", "class_name": "DocumentRoom" }]
+	},
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["DocumentRoom"] }],
+	// A separate copy with its own database, used to prove a risky change on
+	// Cloudflare before it goes to the live site: CLOUDFLARE_ENV=staging npm run deploy
+	"env": {
+		"staging": {
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "ajaia-docs-staging",
+					"database_id": "c9a97957-fd05-4360-af8b-309e9a821849",
+					"migrations_dir": "migrations"
+				}
+			],
+			"durable_objects": {
+				"bindings": [{ "name": "DOCUMENT_ROOM", "class_name": "DocumentRoom" }]
+			},
+			"migrations": [{ "tag": "v1", "new_sqlite_classes": ["DocumentRoom"] }]
+		}
+	}
 }

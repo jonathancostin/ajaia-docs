@@ -2,33 +2,23 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
-import { type DocumentRow, findAccess, requireAccess, type Role } from "../access.ts";
+import { type DocumentRow, requireAccess, type Role } from "../access.ts";
 import { contentSchema, EMPTY_DOCUMENT, MAX_CONTENT_BYTES } from "../content.ts";
 import type { Db } from "../db/client.ts";
-import { documentShares, documents, documentVersions, users } from "../db/schema.ts";
-import { documentNotFound, HttpError } from "../errors.ts";
-import { keepVersion } from "../history.ts";
+import { documentShares, documents, documentStates, documentVersions, users } from "../db/schema.ts";
+import { HttpError } from "../errors.ts";
+import { DEFAULT_TITLE, MAX_TITLE_LENGTH } from "../room.ts";
 import { type AppEnv, requireUser } from "../session.ts";
 import { jsonBody } from "../validate.ts";
-
-const DEFAULT_TITLE = "Untitled document";
+import { roomFor } from "./collab.ts";
 
 const title = z
   .string()
   .trim()
   .min(1, "Give the document a title.")
-  .max(200, "Titles can be up to 200 characters.");
+  .max(MAX_TITLE_LENGTH, "Titles can be up to 200 characters.");
 
 const createBody = z.object({ title: title.optional(), content: contentSchema.optional() });
-
-const updateBody = z
-  .object({
-    title: title.optional(),
-    content: contentSchema.optional(),
-    baseVersion: z.number().int().positive(),
-    force: z.boolean().optional(),
-  })
-  .refine((body) => body.title !== undefined || body.content !== undefined, { message: "There is nothing to save." });
 
 const shareBody = z.object({
   email: z.string().trim().toLowerCase().pipe(z.email({ message: "Enter a valid email address." })),
@@ -59,14 +49,6 @@ export async function toMeta(db: Db, document: DocumentRow, role: Role) {
     updatedAt: document.updatedAt,
     updatedBy: editor ? { id: editor.id, name: editor.name } : null,
   };
-}
-
-/** The 409 a save gets when someone else saved first. It says who and when, for the editor's banner. */
-export async function conflict(db: Db, document: DocumentRow, role: Role) {
-  const { version, updatedAt, updatedBy } = await toMeta(db, document, role);
-  return new HttpError(409, "conflict", "Someone saved a newer version of this document.", {
-    current: { version, updatedAt, updatedBy },
-  });
 }
 
 export const documentRoutes = new Hono<AppEnv>()
@@ -133,39 +115,8 @@ export const documentRoutes = new Hono<AppEnv>()
     return c.json({ document: { ...(await toMeta(db, document, role)), content: JSON.parse(document.content) } });
   })
 
-  .patch("/:id", jsonBody(updateBody), async (c) => {
-    const { db, user } = c.var;
-    const id = c.req.param("id");
-    const body = c.req.valid("json");
-    const { document, role } = await requireAccess(db, id, user.id, "write");
-    if (!body.force && document.version !== body.baseVersion) throw await conflict(db, document, role);
-
-    // The write only succeeds if the row is still the one just read. So two
-    // saves from the same version cannot both win, and `document` is exactly
-    // the state this save replaces, which makes it the right one to keep below.
-    const saved = await db
-      .update(documents)
-      .set({
-        ...(body.title !== undefined && { title: body.title }),
-        ...(body.content !== undefined && { content: JSON.stringify(body.content) }),
-        version: sql`${documents.version} + 1`,
-        updatedAt: Date.now(),
-        updatedBy: user.id,
-      })
-      .where(and(eq(documents.id, id), eq(documents.version, document.version)))
-      .returning()
-      .get();
-
-    if (!saved) {
-      const latest = await findAccess(db, id, user.id);
-      if (!latest) throw documentNotFound();
-      throw await conflict(db, latest.document, latest.role);
-    }
-    if (saved.content !== document.content || saved.title !== document.title) {
-      await keepVersion(db, document, user.id);
-    }
-    return c.json({ document: await toMeta(db, saved, role) });
-  })
+  // There is no route that saves content or a title. Edits go through the
+  // document's live room (worker/room.ts), which is the only writer of both.
 
   .delete("/:id", async (c) => {
     const { db, user } = c.var;
@@ -174,8 +125,10 @@ export const documentRoutes = new Hono<AppEnv>()
     await db.batch([
       db.delete(documentShares).where(eq(documentShares.documentId, id)),
       db.delete(documentVersions).where(eq(documentVersions.documentId, id)),
+      db.delete(documentStates).where(eq(documentStates.documentId, id)),
       db.delete(documents).where(eq(documents.id, id)),
     ]);
+    await (await roomFor(c.env, id)).deleted();
     return c.body(null, 204);
   })
 
@@ -204,14 +157,18 @@ export const documentRoutes = new Hono<AppEnv>()
       .insert(documentShares)
       .values({ documentId: document.id, userId: target.id, role, createdAt: Date.now() })
       .onConflictDoUpdate({ target: [documentShares.documentId, documentShares.userId], set: { role } });
+    // A role change takes effect at once, even for someone with the document open.
+    await (await roomFor(c.env, document.id)).accessChanged(target.id);
     return c.json({ share: { user: target, role } });
   })
 
   .delete("/:id/shares/:userId", async (c) => {
     const { db, user } = c.var;
     const { document } = await requireAccess(db, c.req.param("id"), user.id, "share");
+    const userId = c.req.param("userId");
     await db
       .delete(documentShares)
-      .where(and(eq(documentShares.documentId, document.id), eq(documentShares.userId, c.req.param("userId"))));
+      .where(and(eq(documentShares.documentId, document.id), eq(documentShares.userId, userId)));
+    await (await roomFor(c.env, document.id)).accessChanged(userId);
     return c.body(null, 204);
   });

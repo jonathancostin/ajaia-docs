@@ -49,20 +49,12 @@ function endSession() {
   queryClient.setQueryData<User | null>(sessionKey, null);
 }
 
-/** Flush functions of editors with unsaved changes, run before the user changes. */
-export const pendingSaves = new Set<() => Promise<void>>();
-
-async function flushPendingSaves() {
-  await Promise.all([...pendingSaves].map((flush) => flush()));
-}
-
 export async function signIn(email: string, password: string) {
   const { user } = await api.login(email, password);
   startSession(user);
 }
 
 export async function signOut() {
-  await flushPendingSaves();
   try {
     await api.logout();
   } finally {
@@ -71,7 +63,6 @@ export async function signOut() {
 }
 
 export async function switchUser(email: string) {
-  await flushPendingSaves();
   await api.logout().catch(() => undefined);
   try {
     await signIn(email, DEMO_PASSWORD);

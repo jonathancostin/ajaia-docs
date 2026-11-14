@@ -1,10 +1,17 @@
+import { abortAllDurableObjects } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { type Actor, call, createSharedDocument, paragraph, setUp } from "./helpers.ts";
+import { openRoom } from "./live.ts";
 
 let cookies: Record<Actor, string | undefined>;
 beforeAll(async () => {
   cookies = await setUp();
 });
+
+const stored = async (id: string) => {
+  const response = await call("GET", `/documents/${id}`, { cookie: cookies.owner });
+  return ((await response.json()) as { document: { content: unknown; version: number } }).document;
+};
 
 describe("saving", () => {
   it("keeps formatting exactly as the editor sent it", async () => {
@@ -42,37 +49,98 @@ describe("saving", () => {
     const reopened = await call("GET", `/documents/${document.id}`, { cookie: cookies.owner });
     expect(((await reopened.json()) as { document: { content: unknown } }).document.content).toEqual(content);
   });
+});
 
-  it("refuses a save that started from an older version, unless forced", async () => {
+describe("live editing", () => {
+  it("shows each person the other's edits and saves the merged result", async () => {
     const document = await createSharedDocument(cookies.owner);
-    const save = (actor: Actor, text: string, extra: object = {}) =>
-      call("PATCH", `/documents/${document.id}`, {
-        cookie: cookies[actor],
-        body: { content: paragraph(text), baseVersion: document.version, ...extra },
-      });
+    const alice = await openRoom(document.id, cookies.owner);
+    const bob = await openRoom(document.id, cookies.editor);
+    expect(alice.text()).toContain("original");
+    expect(bob.title()).toBe("Quarterly plan");
 
-    expect((await save("editor", "from Bob")).status).toBe(200);
+    // Both type at the same moment, before either has seen the other's edit.
+    alice.type("Alice's line");
+    bob.type("Bob's line");
+    await alice.roundTrip();
+    await bob.roundTrip();
+    await alice.roundTrip();
 
-    const stale = await save("owner", "from Alice");
-    expect(stale.status).toBe(409);
-    const conflict = (await stale.json()) as { current: { version: number; updatedBy: { name: string } } };
-    expect(conflict.current.version).toBe(document.version + 1);
-    expect(conflict.current.updatedBy.name).toBe("Bob Okafor");
+    for (const person of [alice, bob]) {
+      expect(person.text()).toContain("Alice's line");
+      expect(person.text()).toContain("Bob's line");
+    }
+    expect(alice.text()).toBe(bob.text());
 
-    const read = async () => {
-      const response = await call("GET", `/documents/${document.id}`, { cookie: cookies.owner });
-      return ((await response.json()) as { document: { content: unknown } }).document.content;
-    };
-    expect(await read()).toEqual(paragraph("from Bob"));
+    await bob.saved();
+    const saved = JSON.stringify((await stored(document.id)).content);
+    expect(saved).toContain("original");
+    expect(saved).toContain("Alice's line");
+    expect(saved).toContain("Bob's line");
+  });
 
-    expect((await save("owner", "from Alice", { force: true })).status).toBe(200);
-    expect(await read()).toEqual(paragraph("from Alice"));
+  it("tells everyone in the room when the document was saved, and by whom", async () => {
+    const document = await createSharedDocument(cookies.owner);
+    const alice = await openRoom(document.id, cookies.owner);
+    const carol = await openRoom(document.id, cookies.viewer);
+    alice.type("something new");
+    await alice.saved();
+    await carol.roundTrip();
+
+    expect(carol.messages.at(-1)).toMatchObject({
+      type: "saved",
+      version: document.version + 1,
+      updatedBy: { name: "Alice Nguyen" },
+    });
+  });
+
+  it("does not save or count a change when someone only opens the document", async () => {
+    const document = await createSharedDocument(cookies.owner);
+    const bob = await openRoom(document.id, cookies.editor);
+    await bob.saved();
+    bob.close();
+    expect((await stored(document.id)).version).toBe(document.version);
+  });
+
+  it("never saves content the editor does not support, and says so", async () => {
+    const document = await createSharedDocument(cookies.owner);
+    const bob = await openRoom(document.id, cookies.editor);
+    bob.insert("image", { src: "https://example.com/tracker.png" });
+    const message = await bob.saved();
+
+    expect(message?.type).toBe("save-failed");
+    expect(await stored(document.id)).toMatchObject({ content: paragraph("original"), version: document.version });
+  });
+
+  it("keeps its state when the room shuts down, so a client that was offline merges without duplicating text", async () => {
+    const document = await createSharedDocument(cookies.owner);
+    const alice = await openRoom(document.id, cookies.owner);
+    alice.type("written before the restart");
+    await alice.saved();
+
+    // The room is evicted from memory, as Cloudflare does to idle rooms. Alice's
+    // tab still holds its copy, and reconnects with it.
+    await abortAllDurableObjects();
+    const aliceAgain = await openRoom(document.id, cookies.owner, {}, alice.doc);
+    aliceAgain.type("written after the restart");
+    await aliceAgain.saved();
+
+    // Each line is there once. A room that rebuilt its state from the stored
+    // text would have merged Alice's copy in as new text and doubled it.
+    const saved = JSON.stringify((await stored(document.id)).content);
+    expect(saved.split("original")).toHaveLength(2);
+    expect(saved.split("written before the restart")).toHaveLength(2);
+    expect(saved.split("written after the restart")).toHaveLength(2);
   });
 });
 
 describe("version history", () => {
-  const save = (id: string, actor: Actor, text: string) =>
-    call("PATCH", `/documents/${id}`, { cookie: cookies[actor], body: { content: paragraph(text), baseVersion: 1, force: true } });
+  const edit = async (id: string, actor: Actor, text: string) => {
+    const person = await openRoom(id, cookies[actor]);
+    person.type(text);
+    await person.saved();
+    return person;
+  };
   const history = async (id: string) => {
     const response = await call("GET", `/documents/${id}/versions`, { cookie: cookies.owner });
     return ((await response.json()) as { versions: { id: string; savedBy: { name: string } }[] }).versions;
@@ -80,41 +148,63 @@ describe("version history", () => {
   const contentOf = async (path: string) => {
     const response = await call("GET", path, { cookie: cookies.owner });
     const body = (await response.json()) as Record<string, { content: unknown }>;
-    return (body.document ?? body.version).content;
+    return JSON.stringify((body.document ?? body.version).content);
   };
 
-  it("keeps what one person wrote when another takes over, but not every autosave", async () => {
+  it("keeps what one person wrote when another starts editing, but not every save", async () => {
     const document = await createSharedDocument(cookies.owner);
-    await save(document.id, "editor", "Bob, first save");
-    await save(document.id, "editor", "Bob, a second later");
-    await save(document.id, "editor", "Bob, and again");
+    const bob = await edit(document.id, "editor", "Bob, first save");
+    bob.type("Bob, a second later");
+    await bob.saved();
+    bob.type("Bob, and again");
+    await bob.saved();
 
     const versions = await history(document.id);
     expect(versions).toHaveLength(1);
     expect(versions[0].savedBy.name).toBe("Alice Nguyen");
-    expect(await contentOf(`/documents/${document.id}/versions/${versions[0].id}`)).toEqual(paragraph("original"));
+    expect(JSON.parse(await contentOf(`/documents/${document.id}/versions/${versions[0].id}`))).toEqual(
+      paragraph("original"),
+    );
   });
 
-  it("restores an old version and keeps the replaced one, so a restore can be undone", async () => {
+  it("keeps one version, not one per save, while two people type in turn", async () => {
     const document = await createSharedDocument(cookies.owner);
-    await save(document.id, "editor", "Bob's rewrite");
+    const bob = await edit(document.id, "editor", "Bob 1");
+    const alice = await edit(document.id, "owner", "Alice 1");
+    for (const round of [2, 3, 4]) {
+      bob.type(`Bob ${round}`);
+      await bob.saved();
+      alice.type(`Alice ${round}`);
+      await alice.saved();
+    }
+    expect(await history(document.id)).toHaveLength(1);
+  });
+
+  it("restores an old version for everyone who has the document open, and the restore can be undone", async () => {
+    const document = await createSharedDocument(cookies.owner);
+    const bob = await edit(document.id, "editor", "Bob's rewrite");
     const [original] = await history(document.id);
 
     const restore = await call("POST", `/documents/${document.id}/versions/${original.id}/restore`, {
       cookie: cookies.owner,
     });
     expect(restore.status).toBe(200);
-    expect(await contentOf(`/documents/${document.id}`)).toEqual(paragraph("original"));
+    expect(JSON.parse(await contentOf(`/documents/${document.id}`))).toEqual(paragraph("original"));
+
+    // Bob still has the document open. His copy changes without a reload.
+    await bob.roundTrip();
+    expect(bob.text()).not.toContain("Bob's rewrite");
+    expect(bob.text()).toContain("original");
 
     const [replaced] = await history(document.id);
     expect(replaced.savedBy.name).toBe("Bob Okafor");
-    expect(await contentOf(`/documents/${document.id}/versions/${replaced.id}`)).toEqual(paragraph("Bob's rewrite"));
+    expect(await contentOf(`/documents/${document.id}/versions/${replaced.id}`)).toContain("Bob's rewrite");
   });
 
   it("does not serve one document's version through another document", async () => {
     const first = await createSharedDocument(cookies.owner);
     const second = await createSharedDocument(cookies.owner);
-    await save(first.id, "editor", "changed");
+    await edit(first.id, "editor", "changed");
     const [version] = await history(first.id);
 
     const read = await call("GET", `/documents/${second.id}/versions/${version.id}`, { cookie: cookies.owner });

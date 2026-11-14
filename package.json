@@ -23,27 +23,35 @@
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.5",
     "@tanstack/react-query": "^5.107.1",
+    "@tiptap/extension-collaboration": "^3.34.0",
+    "@tiptap/extension-collaboration-caret": "^3.34.0",
     "@tiptap/extensions": "^3.34.0",
     "@tiptap/html": "^3.34.0",
     "@tiptap/markdown": "^3.34.0",
     "@tiptap/pm": "^3.34.0",
     "@tiptap/react": "^3.34.0",
     "@tiptap/starter-kit": "^3.34.0",
+    "@tiptap/y-tiptap": "^3.3.0",
     "@ui-sdk/core": "^0.1.0-beta.1",
     "@ui-sdk/react": "^0.1.0-beta.1",
     "drizzle-orm": "^0.45.4",
     "hono": "^4.13.18",
     "lucide-react": "^1.72.0",
     "mammoth": "^1.13.0",
+    "partyserver": "^0.5.10",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router": "^8.5.1",
     "tailwindcss": "^4.3.5",
+    "y-partyserver": "^2.2.0",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.33",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.69.1",
     "@cloudflare/vitest-plugin": "^1.8.2",
+    "@cloudflare/workers-types": "^5.20261114.1",
     "@playwright/test": "^1.65.1",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
@@ -60,5 +68,10 @@
     "vite": "^8.3.6",
     "vitest": "^5.1.0",
     "wrangler": "^4.162.0"
+  },
+  "overrides": {
+    "y-partyserver": {
+      "@cloudflare/workers-types": "$@cloudflare/workers-types"
+    }
   }
 }

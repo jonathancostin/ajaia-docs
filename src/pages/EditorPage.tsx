@@ -1,23 +1,26 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+import Collaboration from "@tiptap/extension-collaboration";
+import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 import { Button } from "@ui-sdk/react/button";
 import { Field, FieldLabel } from "@ui-sdk/react/field";
 import { Input } from "@ui-sdk/react/input";
 import { ArrowLeft, Download } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { api, ApiError } from "../api";
-import type { DocumentDetail, ErrorCode } from "../api";
+import type { DocumentDetail } from "../api";
 import { Header } from "../components/Header";
 import { HistoryDialog } from "../components/HistoryDialog";
+import { Presence, userColor } from "../components/Presence";
 import { ShareDialog } from "../components/ShareDialog";
 import { Toolbar } from "../components/Toolbar";
-import { useAutosave } from "../hooks/useAutosave";
-import type { SaveStatus } from "../hooks/useAutosave";
-import { editorExtensions } from "../lib/extensions";
+import { useCollab, useCollabTitle } from "../hooks/useCollab";
+import type { CollabRoom } from "../hooks/useCollab";
+import { COLLAB_FIELD, starterKitOptions } from "../lib/extensions";
 import { contentWidth } from "../layout";
-import { handleApiError, useUser } from "../session";
+import { useUser } from "../session";
 
 export function EditorPage() {
   const { id = "" } = useParams();
@@ -35,11 +38,12 @@ function DocumentLoader({ id }: { id: string }) {
   const query = useQuery({
     queryKey: ["document", id],
     queryFn: () => api.getDocument(id),
-    // The editor owns the content once loaded; never reuse a stale copy.
     gcTime: 0,
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
+  // Bumped when the server closes the room, so the room reopens with the access the server now reports.
+  const [generation, setGeneration] = useState(0);
 
   if (query.isPending) return <p className="p-8 text-center text-slate-600">Loading document...</p>;
   if (query.isError) {
@@ -59,47 +63,88 @@ function DocumentLoader({ id }: { id: string }) {
       </div>
     );
   }
-  return <DocumentEditor initial={query.data.document} />;
+  const document = query.data.document;
+  return (
+    <DocumentRoom
+      key={`${document.role}:${generation}`}
+      document={document}
+      onAccessChanged={async () => {
+        await query.refetch();
+        setGeneration((value) => value + 1);
+      }}
+      onUnreachable={() => void query.refetch()}
+    />
+  );
 }
 
-const statusText: Record<Exclude<SaveStatus, "error">, string> = {
-  saved: "Saved",
-  saving: "Saving...",
-  unsaved: "Unsaved changes",
-  conflict: "Unsaved changes",
-};
-
-// Retrying cannot fix these, so the server's own message is shown instead of a retry button.
-const finalErrors: Partial<Record<ErrorCode, true>> = { forbidden: true, invalid: true, too_large: true, not_found: true };
-
-function DocumentEditor({ initial }: { initial: DocumentDetail }) {
+function DocumentRoom({
+  document,
+  onAccessChanged,
+  onUnreachable,
+}: {
+  document: DocumentDetail;
+  onAccessChanged: () => void;
+  onUnreachable: () => void;
+}) {
   const queryClient = useQueryClient();
-  const user = useUser();
-  const canEdit = initial.role !== "viewer";
-  const isOwner = initial.role === "owner";
-  const [title, setTitle] = useState(initial.title);
-  const [edited, setEdited] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const titleRef = useRef(initial.title);
-  // Kept from the last update so a save on unmount does not need the editor.
-  const contentRef = useRef<ProseMirrorNode | null>(null);
+  const [lastEditor, setLastEditor] = useState(document.updatedBy);
+  const collab = useCollab(document.id, {
+    onSaved: (message) => {
+      setLastEditor(message.updatedBy);
+      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+    },
+    onAccessChanged,
+    onUnreachable,
+  });
 
-  const getDraft = useCallback(
-    () => ({
-      title: titleRef.current.trim() || "Untitled document",
-      content: contentRef.current?.toJSON() ?? initial.content,
-    }),
-    [initial.content],
+  if (!collab.room || !collab.synced) return <p className="p-8 text-center text-slate-600">Loading document...</p>;
+  return (
+    <DocumentEditor
+      document={document}
+      room={collab.room}
+      connected={collab.connected}
+      pending={collab.pending}
+      saveError={collab.saveError}
+      lastEditor={lastEditor}
+    />
   );
-  const onSaved = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: ["documents"] });
-  }, [queryClient]);
-  const autosave = useAutosave({ id: initial.id, version: initial.version, getDraft, onSaved });
-  const { markDirty } = autosave;
+}
+
+function DocumentEditor({
+  document: meta,
+  room,
+  connected,
+  pending,
+  saveError,
+  lastEditor,
+}: {
+  document: DocumentDetail;
+  room: CollabRoom;
+  connected: boolean;
+  pending: boolean;
+  saveError: string | null;
+  lastEditor: DocumentDetail["updatedBy"];
+}) {
+  const user = useUser();
+  const canEdit = meta.role !== "viewer";
+  const isOwner = meta.role === "owner";
+  const title = useCollabTitle(room.ydoc);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const editor = useEditor({
-    extensions: editorExtensions,
-    content: initial.content,
+    extensions: [
+      StarterKit.configure({ ...starterKitOptions, undoRedo: false }),
+      Collaboration.configure({ document: room.ydoc, field: COLLAB_FIELD }),
+      CollaborationCaret.configure({
+        provider: room.provider,
+        user: { id: user.id, name: user.name, color: userColor(user.id) },
+        // Colours come from other clients, so only a plain hex colour reaches the style attribute.
+        selectionRender: (other) =>
+          typeof other.color === "string" && /^#[0-9a-f]{6}$/i.test(other.color)
+            ? { class: "collab-selection", style: `background-color: ${other.color}33` }
+            : {},
+      }),
+    ],
     editable: canEdit,
     editorProps: {
       attributes: {
@@ -107,31 +152,7 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
         "aria-label": "Document content",
       },
     },
-    onUpdate: ({ editor }) => {
-      contentRef.current = editor.state.doc;
-      setEdited(true);
-      markDirty();
-    },
   });
-
-  function replaceDocument(document: DocumentDetail) {
-    editor.commands.setContent(document.content, { emitUpdate: false });
-    contentRef.current = editor.state.doc;
-    titleRef.current = document.title;
-    setTitle(document.title);
-    setEdited(true);
-    autosave.acceptVersion(document.version);
-  }
-
-  async function loadTheirVersion() {
-    setActionError(null);
-    try {
-      replaceDocument((await api.getDocument(initial.id)).document);
-    } catch (error) {
-      handleApiError(error);
-      setActionError(error instanceof Error ? error.message : "Could not load the latest version.");
-    }
-  }
 
   async function downloadMarkdown() {
     setActionError(null);
@@ -140,9 +161,9 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
       const { toMarkdown } = await import("../lib/export");
       const blob = new Blob([toMarkdown(editor.getJSON())], { type: "text/markdown;charset=utf-8" });
       const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
+      const link = window.document.createElement("a");
       link.href = url;
-      link.download = `${(titleRef.current.trim() || "Untitled document").replace(/[\\/:*?"<>|]/g, "-")}.md`;
+      link.download = `${(title.title.trim() || "Untitled document").replace(/[\\/:*?"<>|]/g, "-")}.md`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch {
@@ -150,13 +171,10 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
     }
   }
 
-  const { status, conflict, error: saveError } = autosave;
-  const lastEditor = !edited && initial.updatedBy && initial.updatedBy.id !== user.id ? initial.updatedBy : null;
-
   return (
     <>
       <div className="border-b border-slate-200 bg-white">
-        <div className={`${contentWidth} pt-2.5`}>
+        <div className={`${contentWidth} flex items-center justify-between gap-3 pt-2.5`}>
           <Link
             to="/"
             className="inline-flex items-center gap-1 rounded text-sm font-medium text-slate-700 no-underline hover:text-blue-700"
@@ -164,6 +182,7 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
             <ArrowLeft className="size-4" aria-hidden />
             Back to documents
           </Link>
+          <Presence provider={room.provider} selfId={user.id} />
         </div>
         <div className={`${contentWidth} flex flex-wrap items-center gap-x-4 gap-y-2 pt-1.5 pb-3`}>
           <div className="min-w-0 flex-1 basis-60">
@@ -172,49 +191,32 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
               <Input
                 className="-mx-1 h-auto w-full border-transparent bg-transparent px-1 text-xl font-semibold text-slate-900 placeholder:text-slate-500 hover:bg-slate-50 read-only:hover:bg-transparent"
                 placeholder="Untitled document"
-                value={title}
+                value={title.title}
                 readOnly={!canEdit}
-                onValueChange={(value) => {
-                  titleRef.current = value;
-                  setTitle(value);
-                  setEdited(true);
-                  markDirty();
-                }}
+                maxLength={200}
+                onValueChange={title.change}
+                onBlur={() => canEdit && title.commit()}
               />
             </Field>
             <div className="flex flex-wrap gap-x-3 text-sm text-slate-500">
-              {!isOwner && <span>Owned by {initial.owner.name}</span>}
-              {lastEditor && <span>Last edited by {lastEditor.name}</span>}
-              {canEdit && (
-                <span aria-live="polite">
-                  {status !== "error" ? (
-                    statusText[status]
-                  ) : saveError instanceof ApiError && finalErrors[saveError.code] ? (
-                    <span className="text-red-700">{saveError.message}</span>
-                  ) : (
-                    <span className="text-red-700">
-                      Could not save.{" "}
-                      <Button
-                        className="h-auto border-0 bg-transparent p-0 align-baseline font-medium text-red-700 underline"
-                        onClick={() => autosave.retry()}
-                      >
-                        Retry
-                      </Button>
-                    </span>
-                  )}
-                </span>
-              )}
+              {!isOwner && <span>Owned by {meta.owner.name}</span>}
+              {lastEditor && lastEditor.id !== user.id && <span>Last edited by {lastEditor.name}</span>}
+              <span aria-live="polite">
+                {!connected ? (
+                  <span className="text-amber-800">Offline. Changes will sync when you reconnect.</span>
+                ) : !canEdit ? null : saveError ? (
+                  <span className="text-red-700">{saveError}</span>
+                ) : pending ? (
+                  "Saving..."
+                ) : (
+                  "Saved"
+                )}
+              </span>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <ShareDialog documentId={initial.id} isOwner={isOwner} />
-            <HistoryDialog
-              documentId={initial.id}
-              currentTitle={title}
-              canRestore={canEdit}
-              beforeRestore={autosave.retry}
-              onRestored={replaceDocument}
-            />
+            <ShareDialog documentId={meta.id} isOwner={isOwner} />
+            <HistoryDialog documentId={meta.id} currentTitle={title.title} canRestore={canEdit} />
             <Button onClick={downloadMarkdown}>
               <Download aria-hidden />
               Download as Markdown
@@ -231,20 +233,6 @@ function DocumentEditor({ initial }: { initial: DocumentDetail }) {
             <p className="rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700">
               You can view this document but not edit it.
             </p>
-          )}
-          {conflict && (
-            <div
-              role="alert"
-              className="flex flex-wrap items-center gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-            >
-              <p className="mr-auto">
-                {conflict.current?.updatedBy?.name ?? "Someone else"} saved a newer version of this document.
-              </p>
-              <Button onClick={loadTheirVersion}>Load their version</Button>
-              <Button data-variant="solid" onClick={autosave.keepMine}>
-                Keep mine
-              </Button>
-            </div>
           )}
           {actionError && (
             <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">

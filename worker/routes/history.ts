@@ -1,11 +1,11 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { requireAccess } from "../access.ts";
-import { documents, documentVersions, users } from "../db/schema.ts";
-import { HttpError } from "../errors.ts";
-import { keepVersion } from "../history.ts";
+import { documentVersions, users } from "../db/schema.ts";
+import { documentNotFound, HttpError } from "../errors.ts";
 import { type AppEnv, requireUser } from "../session.ts";
-import { conflict, toMeta } from "./documents.ts";
+import { roomFor } from "./collab.ts";
+import { toMeta } from "./documents.ts";
 
 const summary = {
   id: documentVersions.id,
@@ -54,22 +54,11 @@ export const historyRoutes = new Hono<AppEnv>()
       .get();
     if (!version) throw new HttpError(404, "not_found", "That version no longer exists.");
 
-    // Keep what is being replaced, so a restore can itself be undone. The
-    // write below only succeeds if the row is still the one that was kept. If
-    // someone saved in between, the restore is refused instead of dropping their save.
-    await keepVersion(db, document, user.id, true);
-    const restored = await db
-      .update(documents)
-      .set({
-        title: version.title,
-        content: version.content,
-        version: sql`${documents.version} + 1`,
-        updatedAt: Date.now(),
-        updatedBy: user.id,
-      })
-      .where(and(eq(documents.id, document.id), eq(documents.version, document.version)))
-      .returning()
-      .get();
-    if (!restored) throw await conflict(db, document, role);
+    // The room does the restore: it saves what anyone was still typing, keeps
+    // that state as a version so the restore can be undone, then shows the
+    // restored content to everyone who has the document open.
+    const room = await roomFor(c.env, document.id);
+    const restored = await room.restore({ title: version.title, content: JSON.parse(version.content) }, user.id);
+    if (!restored) throw documentNotFound();
     return c.json({ document: { ...(await toMeta(db, restored, role)), content: JSON.parse(restored.content) } });
   });

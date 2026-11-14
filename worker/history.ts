@@ -1,5 +1,5 @@
 // Version history: when a save replaces a document's state, the old state may
-// be kept. Keeping every autosave would bury the useful versions, so a state is
+// be kept. Keeping every save would bury the useful versions, so a state is
 // kept only when it marks a point someone might want back.
 import { and, desc, eq, notInArray } from "drizzle-orm";
 import type { DocumentRow } from "./access.ts";
@@ -12,15 +12,15 @@ const MAX_VERSIONS = 50;
 const EMPTY_CONTENT = JSON.stringify(EMPTY_DOCUMENT);
 
 /**
- * Keeps `previous` (the state about to be replaced) as a version when:
- * - `always` is set (a restore must be undoable), or
- * - a different person is saving than the one who wrote it, or
- * - the newest kept version is more than ten minutes older than it.
- * A brand new empty document is never kept.
+ * Keeps `previous` (the state about to be replaced) as a version, and says
+ * whether it did. With `always` it is kept: the room passes that for a restore
+ * (so it can be undone) and when a new person starts editing. Otherwise it is
+ * kept as a checkpoint when the last kept version, or the document's creation,
+ * is more than ten minutes older. A brand new empty document is never kept.
  */
-export async function keepVersion(db: Db, previous: DocumentRow, savingUserId: string, always = false) {
-  if (previous.content === EMPTY_CONTENT) return;
-  if (!always && previous.updatedBy === savingUserId) {
+export async function keepVersion(db: Db, previous: DocumentRow, always: boolean): Promise<boolean> {
+  if (previous.content === EMPTY_CONTENT) return false;
+  if (!always) {
     const newest = await db
       .select({ savedAt: documentVersions.savedAt })
       .from(documentVersions)
@@ -28,7 +28,7 @@ export async function keepVersion(db: Db, previous: DocumentRow, savingUserId: s
       .orderBy(desc(documentVersions.savedAt))
       .limit(1)
       .get();
-    if (newest && previous.updatedAt - newest.savedAt <= CHECKPOINT_MS) return;
+    if (previous.updatedAt - (newest?.savedAt ?? previous.createdAt) <= CHECKPOINT_MS) return false;
   }
 
   await db.insert(documentVersions).values({
@@ -49,4 +49,5 @@ export async function keepVersion(db: Db, previous: DocumentRow, savingUserId: s
   await db
     .delete(documentVersions)
     .where(and(eq(documentVersions.documentId, previous.id), notInArray(documentVersions.id, newestIds)));
+  return true;
 }

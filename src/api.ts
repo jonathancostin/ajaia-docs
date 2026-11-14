@@ -53,7 +53,6 @@ export type ErrorCode =
   | "invalid_credentials"
   | "forbidden"
   | "not_found"
-  | "conflict"
   | "invalid"
   | "too_large"
   | "network"
@@ -62,14 +61,11 @@ export type ErrorCode =
 export class ApiError extends Error {
   readonly status: number;
   readonly code: ErrorCode;
-  /** On a 409, the version now on the server and who saved it. */
-  readonly current?: Pick<DocumentMeta, "version" | "updatedAt" | "updatedBy">;
 
-  constructor(status: number, code: ErrorCode, message: string, current?: ApiError["current"]) {
+  constructor(status: number, code: ErrorCode, message: string) {
     super(message);
     this.status = status;
     this.code = code;
-    this.current = current;
   }
 }
 
@@ -86,15 +82,12 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new ApiError(0, "network", "Could not reach the server. Check your connection and try again.");
   }
   if (response.status === 204) return undefined as T;
-  const data = (await response.json().catch(() => null)) as
-    | { error?: { code: ErrorCode; message: string }; current?: ApiError["current"] }
-    | null;
+  const data = (await response.json().catch(() => null)) as { error?: { code: ErrorCode; message: string } } | null;
   if (!response.ok) {
     throw new ApiError(
       response.status,
       data?.error?.code ?? "server",
       data?.error?.message ?? "Something went wrong. Please try again.",
-      data?.current,
     );
   }
   return data as T;
@@ -110,16 +103,9 @@ export const api = {
   listDocuments: () => request<{ owned: DocumentSummary[]; shared: DocumentSummary[] }>("GET", "/documents"),
   createDocument: (input: { title?: string; content?: JSONContent }) =>
     request<{ document: DocumentDetail }>("POST", "/documents", input),
+  // There is no call that saves a title or content. The editor sends edits
+  // through the document's live room (src/hooks/useCollab.ts).
   getDocument: (id: string) => request<{ document: DocumentDetail }>("GET", `/documents/${id}`),
-  /**
-   * Saves a title, content or both. `baseVersion` is the version this client
-   * loaded. If someone saved since, the server answers 409 and nothing changes.
-   * `force` saves anyway.
-   */
-  updateDocument: (
-    id: string,
-    input: { title?: string; content?: JSONContent; baseVersion: number; force?: boolean },
-  ) => request<{ document: DocumentMeta }>("PATCH", `/documents/${id}`, input),
   deleteDocument: (id: string) => request<void>("DELETE", `/documents/${id}`),
 
   listShares: (id: string) => request<{ owner: User; shares: Share[] }>("GET", `/documents/${id}/shares`),

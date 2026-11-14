@@ -14,7 +14,6 @@ import { Listbox, ListboxItem } from "@ui-sdk/react/listbox";
 import { History, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "../api";
-import type { DocumentDetail } from "../api";
 import { editorExtensions } from "../lib/extensions";
 import { formatDateTime } from "../lib/format";
 import { handleApiError } from "../session";
@@ -23,14 +22,10 @@ export function HistoryDialog({
   documentId,
   currentTitle,
   canRestore,
-  beforeRestore,
-  onRestored,
 }: {
   documentId: string;
   currentTitle: string;
   canRestore: boolean;
-  beforeRestore: () => Promise<void>;
-  onRestored: (document: DocumentDetail) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -46,9 +41,8 @@ export function HistoryDialog({
           currentTitle={currentTitle}
           canRestore={canRestore}
           restore={async (versionId) => {
-            await beforeRestore();
-            const { document } = await api.restoreVersion(documentId, versionId);
-            onRestored(document);
+            // The server sends the restored content to every open editor through the room.
+            await api.restoreVersion(documentId, versionId);
             setOpen(false);
           }}
         />

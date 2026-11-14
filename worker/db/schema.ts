@@ -1,4 +1,4 @@
-import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { customType, index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -60,5 +60,22 @@ export const documentVersions = sqliteTable(
   },
   (t) => [index("versions_document_idx").on(t.documentId, t.savedAt)],
 );
+
+// D1 accepts typed arrays for a BLOB and returns either an ArrayBuffer or an array of numbers.
+const bytes = customType<{ data: Uint8Array; driverData: ArrayBuffer | number[] }>({
+  dataType: () => "blob",
+  fromDriver: (value) => new Uint8Array(value),
+});
+
+// The Yjs state behind a document's live room, with the document version it
+// belongs to. `documents.content` stays the readable copy that the list,
+// history and export use. The room writes both in one transaction.
+export const documentStates = sqliteTable("document_states", {
+  documentId: text("document_id")
+    .primaryKey()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  state: bytes("state").notNull(),
+});
 
 export type ShareRole = "viewer" | "editor";
