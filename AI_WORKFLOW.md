@@ -56,6 +56,12 @@ Times are minutes into the four hours.
 - Reverted that one line and left a comment saying why it must stay.
 - Process change: every later change was tested against a local production build before deploying (5 runs out of 5 for this one), and CI now runs the browser test against the production build on every push.
 
+### 0:55, a second model's review
+
+- The agent's work is reviewed in the background by other models. Most of what came back was already fixed or out of date. One point was right: in version history, "Keep mine" and "Restore" read the document and then wrote it in two steps. If someone else saved in the few milliseconds between, their save was replaced without being kept as a version.
+- Fixed in the same commit: both writes now only succeed if the row is still the one that was read. Otherwise the user gets the normal conflict message.
+- The same review questioned whether deleting from the list really deleted. It did. A direct check showed the API's count going from 6 to 5.
+
 ### Smaller ones
 
 - mammoth reads `arrayBuffer` in the browser and `buffer` in Node. Code that passed one failed in the other. The converter passes both so the same function runs in the browser and under test.

@@ -61,6 +61,14 @@ export async function toMeta(db: Db, document: DocumentRow, role: Role) {
   };
 }
 
+/** The 409 a save gets when someone else saved first. It says who and when, for the editor's banner. */
+export async function conflict(db: Db, document: DocumentRow, role: Role) {
+  const { version, updatedAt, updatedBy } = await toMeta(db, document, role);
+  return new HttpError(409, "conflict", "Someone saved a newer version of this document.", {
+    current: { version, updatedAt, updatedBy },
+  });
+}
+
 export const documentRoutes = new Hono<AppEnv>()
   .use(requireUser)
   .use(
@@ -130,9 +138,11 @@ export const documentRoutes = new Hono<AppEnv>()
     const id = c.req.param("id");
     const body = c.req.valid("json");
     const { document, role } = await requireAccess(db, id, user.id, "write");
+    if (!body.force && document.version !== body.baseVersion) throw await conflict(db, document, role);
 
-    // The version check and the write are one statement, so two saves that
-    // start from the same version cannot both succeed.
+    // The write only succeeds if the row is still the one just read. So two
+    // saves from the same version cannot both win, and `document` is exactly
+    // the state this save replaces, which makes it the right one to keep below.
     const saved = await db
       .update(documents)
       .set({
@@ -142,17 +152,14 @@ export const documentRoutes = new Hono<AppEnv>()
         updatedAt: Date.now(),
         updatedBy: user.id,
       })
-      .where(and(eq(documents.id, id), body.force ? undefined : eq(documents.version, body.baseVersion)))
+      .where(and(eq(documents.id, id), eq(documents.version, document.version)))
       .returning()
       .get();
 
     if (!saved) {
       const latest = await findAccess(db, id, user.id);
       if (!latest) throw documentNotFound();
-      const { version, updatedAt, updatedBy } = await toMeta(db, latest.document, latest.role);
-      throw new HttpError(409, "conflict", "Someone saved a newer version of this document.", {
-        current: { version, updatedAt, updatedBy },
-      });
+      throw await conflict(db, latest.document, latest.role);
     }
     if (saved.content !== document.content || saved.title !== document.title) {
       await keepVersion(db, document, user.id);
