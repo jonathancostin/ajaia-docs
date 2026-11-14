@@ -30,6 +30,7 @@ The header has a "Switch user" menu for moving between accounts.
 | `AI_WORKFLOW.md` | AI tools used, what I changed or rejected, how I verified |
 | `VIDEO_URL.txt` | Link to the walkthrough video |
 | `source/` | The full source code, without `node_modules` |
+| `ajaia-docs-source.zip` | The same source as one file |
 | `screenshots/` | The main screens, taken by the browser test |
 
 ## What works
